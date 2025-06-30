@@ -48,19 +48,25 @@ export const createSpriteManager = () => {
   const loadAllSprites = async (): Promise<void> => {
     const spritesToLoad = [
       { name: 'player', path: '/ship.png' },
-      { name: 'boss', path: '/boss.png' },
-      { name: 'basic-enemy', path: '/basic-enemy.png' },
-      { name: 'fast-enemy', path: '/fast-enemy.png' },
-      { name: 'shooter-enemy', path: '/shooter-enemy.png' },
-      { name: 'heavy-enemy', path: '/heavy-enemy.png' },
+      { name: 'boss', path: '/enemies/boss.png' },
+      { name: 'basic-enemy', path: '/enemies/basic-enemy.png' },
+      { name: 'fast-enemy', path: '/enemies/fast-enemy.png' },
+      { name: 'shooter-enemy', path: '/enemies/shooter-enemy.png' },
+      { name: 'heavy-enemy', path: '/enemies/heavy-enemy.png' },
+      // Power-up sprites
+      { name: 'health-powerup', path: '/power-up/health.png' },
+      { name: 'shield-powerup', path: '/power-up/shield.png' },
+      { name: 'weapon-powerup', path: '/power-up/weapon.png' },
       // Explosion animation frames
-      { name: 'explosion1', path: '/explosion.png' },
-      { name: 'explosion2', path: '/explosion2.png' },
-      { name: 'explosion3', path: '/explosion3.png' },
-      { name: 'explosion4', path: '/explosion4.png' },
-      { name: 'explosion5', path: '/explosion5.png' },
-      { name: 'explosion6', path: '/explosion6.png' },
-      { name: 'explosion7', path: '/explosion7.png' },
+      { name: 'explosion1', path: '/explosion/explosion.png' },
+      { name: 'explosion2', path: '/explosion/explosion2.png' },
+      { name: 'explosion3', path: '/explosion/explosion3.png' },
+      { name: 'explosion4', path: '/explosion/explosion4.png' },
+      { name: 'explosion5', path: '/explosion/explosion5.png' },
+      { name: 'explosion6', path: '/explosion/explosion6.png' },
+      { name: 'explosion7', path: '/explosion/explosion7.png' },
+      // UI assets
+      { name: 'logo', path: '/logo.png' },
     ];
 
     const loadPromises = spritesToLoad.map(sprite => 

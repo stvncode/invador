@@ -1,33 +1,34 @@
-import { motion } from 'framer-motion';
-import React from 'react';
-import { useGameStore } from '../lib/game/store';
-import { Button } from './ui/button';
+import { motion } from 'framer-motion'
+import React, { useEffect, useRef } from 'react'
+import { spriteManager } from '../lib/game/sprites'
+import { useGameStore } from '../lib/game/store'
+import { Button } from './ui/button'
+import { SoundToggle } from './ui/sound-toggle'
 
 export const GameMenu: React.FC = () => {
-  const startGame = useGameStore(state => state.startGame);
-  const setGameState = useGameStore(state => state.setGameState);
-  const highScores = useGameStore(state => state.highScores);
-  const getTopScores = useGameStore(state => state.getTopScores);
+  const startGame = useGameStore(state => state.startGame)
+  const setGameState = useGameStore(state => state.setGameState)
+  const getTopScores = useGameStore(state => state.getTopScores)
 
-  const topScores = getTopScores(5);
+  const topScores = getTopScores(5)
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-black via-blue-900 to-purple-900">
+      {/* Sound Toggle - Top Right */}
+      <div className="absolute top-6 right-6 z-10">
+        <SoundToggle />
+      </div>
+
       <motion.div 
         className="text-center space-y-8 p-8"
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8 }}
       >
-        {/* Title */}
-        <motion.h1 
-          className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-        >
-          SPACE INVADERS
-        </motion.h1>
+        {/* Logo and Title */}
+        <div className="space-y-6">
+          <GameLogo />
+        </div>
 
         <motion.p 
           className="text-xl text-gray-300"
@@ -40,7 +41,7 @@ export const GameMenu: React.FC = () => {
 
         {/* Menu Buttons */}
         <motion.div 
-          className="flex flex-col space-y-4 mt-12"
+          className="flex flex-col justify-center items-center space-y-4 mt-12"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.7 }}
@@ -100,5 +101,64 @@ export const GameMenu: React.FC = () => {
         </motion.div>
       </motion.div>
     </div>
-  );
-}; 
+  )
+}
+
+// Logo component using sprite
+const GameLogo: React.FC = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // Clear canvas with transparent background
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+    // Try to draw logo sprite, fallback to pixel art if not available
+    if (!spriteManager.drawSprite(ctx, 'logo', 0, 0, canvas.width, canvas.height)) {
+      // Fallback: draw a simple space invader shape using rectangles
+      ctx.fillStyle = '#00ffff'
+      
+      // Simple pixel art invader shape
+      const scale = 4
+      const pixels = [
+        [0,0,1,0,0,0,0,0,1,0,0],
+        [0,0,0,1,0,0,0,1,0,0,0],
+        [0,0,1,1,1,1,1,1,1,0,0],
+        [0,1,1,0,1,1,1,0,1,1,0],
+        [1,1,1,1,1,1,1,1,1,1,1],
+        [1,0,1,1,1,1,1,1,1,0,1],
+        [1,0,1,0,0,0,0,0,1,0,1],
+        [0,0,0,1,1,0,1,1,0,0,0],
+      ]
+      
+      const startX = (canvas.width - pixels[0].length * scale) / 2
+      const startY = (canvas.height - pixels.length * scale) / 2
+      
+      pixels.forEach((row, y) => {
+        row.forEach((pixel, x) => {
+          if (pixel) {
+            ctx.fillRect(startX + x * scale, startY + y * scale, scale, scale)
+          }
+        })
+      })
+    }
+  }, [])
+
+  return (
+    <motion.canvas
+      ref={canvasRef}
+      width={550}
+      height={200}
+      className="mx-auto"
+      style={{ imageRendering: 'pixelated' }}
+      initial={{ opacity: 0, scale: 0.5 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: 0.1, type: "spring", stiffness: 150 }}
+    />
+  )
+} 

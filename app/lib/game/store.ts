@@ -1,6 +1,7 @@
 import * as Runtime from "effect/Runtime"
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
+import { soundManager } from './audio'
 import { isColliding } from './services'
 import type {
   Bullet,
@@ -74,6 +75,7 @@ interface GameStore {
   
   addPowerUp: (powerUp: PowerUp) => void;
   removePowerUp: (id: string) => void;
+  updatePowerUps: (deltaTime: number) => void;
   collectPowerUp: (id: string) => void;
   
   addParticle: (particle: Particle) => void;
@@ -223,35 +225,44 @@ export const useGameStore = create<GameStore>()(
       // Game State Actions
       setGameState: (state) => set({ gameState: state }),
       
-      startGame: () => set({
-        gameState: 'playing',
-        isRunning: true,
-        isPaused: false,
-        player: createInitialPlayer(),
-        enemies: [],
-        bullets: [],
-        powerUps: [],
-        particles: [],
-        gameTime: 0,
-        level: 1,
-      }),
+      startGame: () => {
+        set({
+          gameState: 'playing',
+          isRunning: true,
+          isPaused: false,
+          player: createInitialPlayer(),
+          enemies: [],
+          bullets: [],
+          powerUps: [],
+          particles: [],
+          explosions: [],
+          gameTime: 0,
+          level: 1,
+          inputState: initialInputState,
+        });
+        
+        // Start background music
+        soundManager.startBackgroundMusic();
+      },
       
-      pauseGame: () => set({ isPaused: true, gameState: 'paused' }),
-      resumeGame: () => set({ isPaused: false, gameState: 'playing' }),
+      pauseGame: () => {
+        set({ gameState: 'paused', isPaused: true });
+        soundManager.pauseSound('level1-music');
+      },
+      
+      resumeGame: () => {
+        set({ gameState: 'playing', isPaused: false });
+        soundManager.resumeSound('level1-music');
+      },
       
       endGame: () => {
-        const { stats } = get();
-        const newStats = {
-          ...stats,
-          highestLevel: Math.max(stats.highestLevel, get().level),
-        };
-        
-        set({
-          gameState: 'gameOver',
+        set({ 
+          gameState: 'gameOver', 
           isRunning: false,
           isPaused: false,
-          stats: newStats,
         });
+        soundManager.stopBackgroundMusic();
+        soundManager.playSound('explosion'); // Player death sound
       },
       
       resetGame: () => set({
@@ -291,48 +302,57 @@ export const useGameStore = create<GameStore>()(
       
       playerShoot: () => {
         const { player, bullets, config } = get();
-        if (bullets.filter(b => b.owner === 'player').length >= config.bullets.maxOnScreen) return;
+        const now = Date.now();
         
-        const bulletId = `bullet-${Date.now()}-${Math.random()}`;
-        const newBullet: Bullet = {
-          id: bulletId,
+        if (bullets.filter(b => b.owner === 'player').length >= config.bullets.maxOnScreen) return;
+        if (now - get().lastFrameTime < 200) return; // Shooting cooldown
+        
+        const bullet: Bullet = {
+          id: `bullet-${Date.now()}-${Math.random()}`,
           position: {
             x: player.position.x + player.size.width / 2 - 2,
             y: player.position.y,
           },
           velocity: { x: 0, y: -config.bullets.speed },
-          size: { width: 4, height: 10 },
+          size: { width: 4, height: 8 },
           health: 1,
           maxHealth: 1,
           isActive: true,
-          damage: 25,
+          damage: 25 * player.weaponLevel,
           owner: 'player',
           bulletType: 'basic',
         };
         
-        get().addBullet(newBullet);
+        get().addBullet(bullet);
         get().incrementStat('totalBulletsFired');
+        set({ lastFrameTime: now });
+        
+        // Play shoot sound
+        soundManager.playSound('shoot');
       },
       
       playerTakeDamage: (damage) => {
-        const { player } = get();
-        if (player.invulnerable) return;
-        
+        const player = get().player;
         const newHealth = Math.max(0, player.health - damage);
-        const newLives = newHealth <= 0 ? player.lives - 1 : player.lives;
         
-        if (newLives <= 0) {
-          get().endGame();
-        } else {
-          set((state) => ({
-            player: {
-              ...state.player,
-              health: newHealth <= 0 ? state.player.maxHealth : newHealth,
-              lives: newLives,
+        get().updatePlayer({ health: newHealth });
+        
+        // Play low health warning if health is low
+        if (newHealth > 0 && newHealth <= 25) {
+          soundManager.playSound('low-health');
+        }
+        
+        if (newHealth <= 0) {
+          if (player.lives > 1) {
+            get().updatePlayer({ 
+              lives: player.lives - 1, 
+              health: player.maxHealth,
               invulnerable: true,
-              invulnerabilityTime: get().config.player.invulnerabilityDuration,
-            }
-          }));
+              invulnerabilityTime: 3000
+            });
+          } else {
+            get().endGame();
+          }
         }
       },
       
@@ -399,9 +419,54 @@ export const useGameStore = create<GameStore>()(
         powerUps: state.powerUps.filter(p => p.id !== id)
       })),
       
+      updatePowerUps: (deltaTime) => {
+        set((state) => ({
+          powerUps: state.powerUps
+            .map(powerUp => ({
+              ...powerUp,
+              position: {
+                x: powerUp.position.x + powerUp.velocity.x * deltaTime / 1000,
+                y: powerUp.position.y + powerUp.velocity.y * deltaTime / 1000,
+              },
+              duration: powerUp.duration - deltaTime,
+            }))
+            .filter(powerUp => 
+              powerUp.position.y < get().config.canvas.height + 50 && 
+              powerUp.duration > 0
+            )
+        }));
+      },
+      
       collectPowerUp: (id) => {
         const powerUp = get().powerUps.find(p => p.id === id);
         if (!powerUp) return;
+        
+        // Play power-up collection sound
+        soundManager.playSound('power-up');
+        
+        // Create collection effect particles
+        for (let i = 0; i < 4; i++) {
+          get().addParticle({
+            id: `collect-particle-${Date.now()}-${i}`,
+            position: {
+              x: powerUp.position.x + powerUp.size.width / 2,
+              y: powerUp.position.y + powerUp.size.height / 2,
+            },
+            velocity: {
+              x: (Math.random() - 0.5) * 100,
+              y: -Math.random() * 100 - 50,
+            },
+            size: { width: 3, height: 3 },
+            health: 1,
+            maxHealth: 1,
+            isActive: true,
+            lifetime: 0,
+            maxLifetime: 500,
+            color: powerUp.type === 'health' ? '#00ff00' : 
+                   powerUp.type === 'weapon' ? '#0000ff' : '#ffff00',
+            alpha: 1,
+          });
+        }
         
         get().removePowerUp(id);
         get().incrementStat('totalPowerUpsCollected');
@@ -478,6 +543,28 @@ export const useGameStore = create<GameStore>()(
                   lifetime: 0,
                   isActive: true,
                 });
+                
+                // Chance to spawn power-up (20% for normal enemies, 50% for boss)
+                const powerUpChance = enemy.type === 'boss' ? 0.5 : 0.2;
+                if (Math.random() < powerUpChance) {
+                  const powerUpTypes: Array<'health' | 'weapon' | 'shield'> = ['health', 'weapon', 'shield'];
+                  const powerUpType = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+                  
+                  get().addPowerUp({
+                    id: `powerup-${Date.now()}-${Math.random()}`,
+                    position: {
+                      x: enemy.position.x + enemy.size.width / 2 - 15, // Center power-up
+                      y: enemy.position.y + enemy.size.height / 2 - 15,
+                    },
+                    velocity: { x: 0, y: 50 }, // Slow downward movement
+                    size: { width: 30, height: 30 },
+                    health: 1,
+                    maxHealth: 1,
+                    isActive: true,
+                    type: powerUpType,
+                    duration: 10000, // Power-up lasts 10 seconds on screen before disappearing
+                  });
+                }
                 
                 // Create small particle debris
                 for (let i = 0; i < 5; i++) {
@@ -610,6 +697,7 @@ export const useGameStore = create<GameStore>()(
         
         get().updateEnemies(deltaTime);
         get().updateBullets(deltaTime);
+        get().updatePowerUps(deltaTime);
         get().updateParticles(deltaTime);
         get().updateExplosions(deltaTime);
         get().checkCollisions();

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { soundManager } from '../lib/game/audio'
 import { spriteManager } from '../lib/game/sprites'
 import { useGameStore } from '../lib/game/store'
 import { GameMenu } from './GameMenu'
@@ -29,16 +30,32 @@ export const Game: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   const shootCooldownRef = useRef<number>(0);
   const [spritesLoaded, setSpritesLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true)
+  const [soundDebug, setSoundDebug] = useState(false)
 
-  // Load sprites on component mount
+  // Initialize sound system and sprites
   useEffect(() => {
-    spriteManager.loadAllSprites().then(() => {
-      setSpritesLoaded(true);
-    }).catch(error => {
-      console.error('Failed to load sprites:', error);
-      setSpritesLoaded(true); // Continue with fallback rectangles
-    });
-  }, []);
+    const initializeGame = async () => {
+      try {
+        // Initialize sound system first
+        await soundManager.init()
+        console.log('Sound system initialized')
+        
+        // Then initialize sprites
+        await spriteManager.loadAllSprites()
+        console.log('Sprites loaded')
+        
+        setSpritesLoaded(true)
+        setIsLoading(false)
+      } catch (error) {
+        console.warn('Failed to initialize game systems:', error)
+        setSpritesLoaded(true) // Continue even if some systems fail
+        setIsLoading(false)
+      }
+    }
+
+    initializeGame()
+  }, [])
 
   // Game loop
   const gameLoop = useCallback((timestamp: number) => {
@@ -107,21 +124,19 @@ export const Game: React.FC = () => {
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // Show loading screen while sprites load
-  if (!spritesLoaded) {
+  // Loading screen with better feedback
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-black via-blue-900 to-purple-900">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-black text-white">
         <div className="text-center space-y-4">
-          <div className="text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-400">
-            SPACE INVADERS
-          </div>
-          <div className="text-xl text-gray-300">Loading sprites...</div>
+          <div className="text-2xl font-bold">Loading Game...</div>
+          <div className="text-sm text-gray-400">Initializing sound system and sprites</div>
           <div className="flex justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400"></div>
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   // Render different screens based on game state
@@ -147,7 +162,61 @@ export const Game: React.FC = () => {
     <div className="relative w-full h-screen bg-black overflow-hidden">
       <GameCanvas />
       <HUD />
-
+      
+      {/* Debug Panel - Only in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="absolute bottom-4 left-4 z-20">
+          <button
+            onClick={() => setSoundDebug(!soundDebug)}
+            className="mb-2 px-3 py-1 bg-blue-600 text-white text-xs rounded"
+          >
+            {soundDebug ? 'Hide' : 'Show'} Sound Debug
+          </button>
+          
+          {soundDebug && (
+            <div className="bg-black/80 rounded-lg p-3 space-y-2 text-xs text-white">
+              <div className="font-bold">Sound Debug Panel</div>
+              <div className="space-x-2">
+                <button 
+                  onClick={() => soundManager.playSound('shoot')}
+                  className="px-2 py-1 bg-green-600 rounded"
+                >
+                  Test Shoot
+                </button>
+                               <button 
+                 onClick={() => soundManager.playSound('explosion')}
+                 className="px-2 py-1 bg-red-600 rounded"
+               >
+                 Test Explosion
+               </button>
+               <button 
+                 onClick={() => soundManager.playSound('power-up')}
+                 className="px-2 py-1 bg-yellow-600 rounded"
+               >
+                 Test Power-up
+               </button>
+              </div>
+              <div className="space-x-2">
+                <button 
+                  onClick={() => soundManager.startBackgroundMusic()}
+                  className="px-2 py-1 bg-purple-600 rounded"
+                >
+                  Start Music
+                </button>
+                <button 
+                  onClick={() => soundManager.stopBackgroundMusic()}
+                  className="px-2 py-1 bg-gray-600 rounded"
+                >
+                  Stop Music
+                </button>
+              </div>
+              <div className="text-xs">
+                Muted: {soundManager.isMuted() ? 'Yes' : 'No'}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -249,22 +318,33 @@ const GameCanvas: React.FC = () => {
       ctx.fillRect(bullet.position.x, bullet.position.y, bullet.size.width, bullet.size.height);
     });
 
-    // Draw power-ups
+    // Draw power-ups (with sprites)
     powerUps.forEach((powerUp) => {
+      let spriteName = '';
+      let fallbackColor = '#ffffff';
+      
       switch (powerUp.type) {
         case 'health':
-          ctx.fillStyle = '#00ff00';
+          spriteName = 'health-powerup';
+          fallbackColor = '#00ff00';
           break;
         case 'weapon':
-          ctx.fillStyle = '#0000ff';
+          spriteName = 'weapon-powerup';
+          fallbackColor = '#0000ff';
           break;
         case 'shield':
-          ctx.fillStyle = '#ffff00';
+          spriteName = 'shield-powerup';
+          fallbackColor = '#ffff00';
           break;
         default:
-          ctx.fillStyle = '#ffffff';
+          fallbackColor = '#ffffff';
       }
-      ctx.fillRect(powerUp.position.x, powerUp.position.y, powerUp.size.width, powerUp.size.height);
+
+      if (!spriteManager.drawSprite(ctx, spriteName, powerUp.position.x, powerUp.position.y, powerUp.size.width, powerUp.size.height)) {
+        // Fallback to colored rectangle if sprite fails
+        ctx.fillStyle = fallbackColor;
+        ctx.fillRect(powerUp.position.x, powerUp.position.y, powerUp.size.width, powerUp.size.height);
+      }
     });
 
     // Draw particles
