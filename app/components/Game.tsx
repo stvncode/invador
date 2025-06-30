@@ -348,18 +348,20 @@ const GameCanvas: React.FC = () => {
       const shipSprite = `ship${player.shipLevel}`;
       const boostSprite = `ship${player.shipLevel}-boost`;
       
-      // Draw boost effects first (behind the ship)
-      if (showBoost && spriteManager.isLoaded(boostSprite)) {
-        // Boost effects with animation based on ship level
-        const boostIntensity = player.shipLevel === 3 
-          ? Math.sin(time * 12) * 0.2 + 0.8  // Faster pulse for laser ship
-          : Math.sin(time * 8) * 0.3 + 0.7;   // Normal pulse
+             // Draw boost effects first (behind the ship)
+       if (showBoost && spriteManager.isLoaded(boostSprite)) {
+         // Boost effects with animation based on ship level
+         const boostIntensity = player.shipLevel >= 4
+           ? Math.sin(time * 15) * 0.15 + 0.85  // Ultra-fast pulse for dual laser ship
+           : player.shipLevel === 3 
+           ? Math.sin(time * 12) * 0.2 + 0.8    // Faster pulse for laser ship
+           : Math.sin(time * 8) * 0.3 + 0.7;     // Normal pulse
         
         ctx.globalAlpha = boostIntensity;
         
-        // Position boost slightly behind the ship
-        const boostX = player.shipLevel === 2 ? player.position.x - 3 : player.position.x;
-        const boostY = player.position.y + match(player.shipLevel).with(1, () => 19).with(2, () => 24).with(3, () => 18).otherwise(() => 18); // Adjust based on ship
+                 // Position boost slightly behind the ship
+         const boostX = player.shipLevel === 2 ? player.position.x - 3 : player.position.x;
+         const boostY = player.position.y + match(player.shipLevel).with(1, () => 19).with(2, () => 24).with(3, () => 18).with(4, () => 20).otherwise(() => 18); // Adjust based on ship
         
         spriteManager.drawSprite(ctx, boostSprite, boostX, boostY, player.size.width, player.size.height);
         ctx.globalAlpha = 1;
@@ -369,10 +371,11 @@ const GameCanvas: React.FC = () => {
       if (!spriteManager.drawSprite(ctx, shipSprite, player.position.x, player.position.y, player.size.width, player.size.height)) {
         // Fallback to generic ship if specific level doesn't load
         if (!spriteManager.drawSprite(ctx, 'ship1', player.position.x, player.position.y, player.size.width, player.size.height)) {
-          // Final fallback rendering
-          const playerColor = player.invulnerable ? '#ff6600' : 
-                             player.shipLevel === 3 ? '#ff00ff' : 
-                             player.shipLevel === 2 ? '#00ffff' : '#00ff88';
+                     // Final fallback rendering
+           const playerColor = player.invulnerable ? '#ff6600' : 
+                              player.shipLevel === 4 ? '#ff0088' : 
+                              player.shipLevel === 3 ? '#ff00ff' : 
+                              player.shipLevel === 2 ? '#00ffff' : '#00ff88';
           
           ctx.shadowColor = playerColor;
           ctx.shadowBlur = player.invulnerable ? 12 : 6;
@@ -399,19 +402,20 @@ const GameCanvas: React.FC = () => {
         ctx.globalAlpha = 1;
       }
       
-      // Ship level indicator (small visual cue)
-      if (player.shipLevel > 1) {
-        const indicatorY = player.position.y - 8;
-        const indicatorX = player.position.x + player.size.width / 2;
-        
-        // Draw level indicator
-        ctx.fillStyle = player.shipLevel === 3 ? '#ff00ff' : '#00ffff';
-        ctx.globalAlpha = 0.8;
-        for (let i = 0; i < player.shipLevel; i++) {
-          ctx.fillRect(indicatorX - 3 + (i * 2), indicatorY, 1, 3);
-        }
-        ctx.globalAlpha = 1;
-      }
+             // Ship level indicator (small visual cue)
+       if (player.shipLevel > 1) {
+         const indicatorY = player.position.y - 8;
+         const indicatorX = player.position.x + player.size.width / 2;
+         
+         // Draw level indicator
+         ctx.fillStyle = player.shipLevel === 4 ? '#ff0088' : 
+                        player.shipLevel === 3 ? '#ff00ff' : '#00ffff';
+         ctx.globalAlpha = 0.8;
+         for (let i = 0; i < player.shipLevel; i++) {
+           ctx.fillRect(indicatorX - 4 + (i * 2), indicatorY, 1, 3);
+         }
+         ctx.globalAlpha = 1;
+       }
     }
 
     // Enhanced enemy rendering with retro styling
@@ -509,20 +513,42 @@ const GameCanvas: React.FC = () => {
             break;
             
           case 'laser':
-            // Piercing purple laser beam
+            // Piercing laser beam (different effects based on width for dual vs single)
+            const isDualLaser = bullet.size.width >= 3; // Level 4 dual lasers are wider
             const laserPulse = Math.sin(time * 15) * 0.3 + 0.7;
             
-            // Laser core
-            ctx.shadowColor = '#ff00ff';
-            ctx.shadowBlur = 8;
-            ctx.fillStyle = '#ff00ff';
-            ctx.globalAlpha = laserPulse;
-            ctx.fillRect(bullet.position.x, bullet.position.y, bullet.size.width, bullet.size.height);
-            
-            // Laser outline
-            ctx.fillStyle = '#ffffff';
-            ctx.globalAlpha = laserPulse * 0.8;
-            ctx.fillRect(bullet.position.x + 0.5, bullet.position.y, bullet.size.width - 1, bullet.size.height);
+            if (isDualLaser) {
+              // Level 4 dual laser: Pink/magenta with more intense effects
+              ctx.shadowColor = '#ff0088';
+              ctx.shadowBlur = 12;
+              ctx.fillStyle = '#ff0088';
+              ctx.globalAlpha = laserPulse;
+              ctx.fillRect(bullet.position.x, bullet.position.y, bullet.size.width, bullet.size.height);
+              
+              // Bright core
+              ctx.fillStyle = '#ffffff';
+              ctx.globalAlpha = laserPulse * 0.9;
+              ctx.fillRect(bullet.position.x + 1, bullet.position.y, bullet.size.width - 2, bullet.size.height);
+              
+              // Outer glow effect
+              ctx.shadowColor = '#ff0088';
+              ctx.shadowBlur = 16;
+              ctx.fillStyle = '#ff0088';
+              ctx.globalAlpha = laserPulse * 0.4;
+              ctx.fillRect(bullet.position.x - 1, bullet.position.y, bullet.size.width + 2, bullet.size.height);
+            } else {
+              // Level 3 single laser: Purple
+              ctx.shadowColor = '#ff00ff';
+              ctx.shadowBlur = 8;
+              ctx.fillStyle = '#ff00ff';
+              ctx.globalAlpha = laserPulse;
+              ctx.fillRect(bullet.position.x, bullet.position.y, bullet.size.width, bullet.size.height);
+              
+              // Laser outline
+              ctx.fillStyle = '#ffffff';
+              ctx.globalAlpha = laserPulse * 0.8;
+              ctx.fillRect(bullet.position.x + 0.5, bullet.position.y, bullet.size.width - 1, bullet.size.height);
+            }
             
             ctx.shadowBlur = 0;
             ctx.globalAlpha = 1;

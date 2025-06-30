@@ -7,13 +7,15 @@ import * as Layer from "effect/Layer"
 
 // ===== Default Sprite Configurations =====
 export const defaultSpriteConfigs = [
-  // Player ship sprites - 3 tiers
+  // Player ship sprites - 4 tiers
   { name: 'ship1', path: '/ship/ship1.png' },
   { name: 'ship1-boost', path: '/ship/boost1.png' },
   { name: 'ship2', path: '/ship/ship2.png' },
   { name: 'ship2-boost', path: '/ship/boost2.png' },
   { name: 'ship3', path: '/ship/ship3.png' },
   { name: 'ship3-boost', path: '/ship/boost3.png' },
+  { name: 'ship4', path: '/ship/ship4.png' },
+  { name: 'ship4-boost', path: '/ship/boost4.png' },
   // Legacy fallback
   { name: 'player', path: '/ship.png' },
   // Enemy sprites

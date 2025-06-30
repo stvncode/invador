@@ -316,7 +316,7 @@ export const useGameStore = create<GameStore>()(
         if (bullets.filter(b => b.owner === 'player').length >= config.bullets.maxOnScreen) return;
         
         // Different cooldowns for different ship levels
-        const cooldown = player.shipLevel === 3 ? 100 : 200; // Laser fires faster
+        const cooldown = player.shipLevel >= 3 ? 100 : 200; // Laser ships fire faster
         if (now - get().lastFrameTime < cooldown) return;
         
         const baseDamage = 25 * player.weaponLevel;
@@ -399,6 +399,33 @@ export const useGameStore = create<GameStore>()(
             };
             get().addBullet(bullet);
             get().incrementStat('totalBulletsFired');
+            break;
+          }
+          
+          case 4: {
+            // Dual Piercing Lasers: Two parallel laser beams
+            const laserOffset = 8; // Distance between the two lasers
+            for (let i = 0; i < 2; i++) {
+              const bullet: Bullet = {
+                id: `dual-laser-${Date.now()}-${Math.random()}-${i}`,
+                position: {
+                  x: player.position.x + player.size.width / 2 - 1 + (i === 0 ? -laserOffset : laserOffset),
+                  y: player.position.y,
+                },
+                velocity: { x: 0, y: -config.bullets.speed * 1.8 }, // Even faster
+                size: { width: 3, height: 35 }, // Thicker and longer laser beams
+                health: 1,
+                maxHealth: 1,
+                isActive: true,
+                damage: baseDamage * 1.8, // Maximum damage
+                owner: 'player',
+                bulletType: 'laser',
+                piercing: true, // Piercing through enemies
+                explosive: false,
+              };
+              get().addBullet(bullet);
+            }
+            get().incrementStat('totalBulletsFired', 2);
             break;
           }
           
@@ -745,14 +772,14 @@ export const useGameStore = create<GameStore>()(
                 });
                 break;
               case 'ship':
-                // Upgrade ship level (max level 3)
-                const newShipLevel = Math.min(3, player.shipLevel + 1);
+                // Upgrade ship level (max level 4)
+                const newShipLevel = Math.min(4, player.shipLevel + 1);
                 get().updatePlayer({
                   shipLevel: newShipLevel
                 });
                 
                 // Show upgrade message based on new ship level
-                const shipNames = ['', 'Basic Fighter', 'Multi-Shot Cruiser', 'Laser Destroyer'];
+                const shipNames = ['', 'Basic Fighter', 'Multi-Shot Cruiser', 'Laser Destroyer', 'Dual Laser Annihilator'];
                 console.log(`🚀 Ship upgraded to Level ${newShipLevel}: ${shipNames[newShipLevel]}!`);
                 
                 // Create extra upgrade particles for ship upgrades

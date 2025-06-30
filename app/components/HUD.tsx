@@ -251,16 +251,18 @@ export const HUD: React.FC = () => {
                 {/* Ship Type Display */}
                 <div className="space-y-1">
                   <div className={`text-xs font-medium ${
+                    player.shipLevel === 4 ? 'text-pink-300' :
                     player.shipLevel === 3 ? 'text-purple-300' :
                     player.shipLevel === 2 ? 'text-cyan-300' : 'text-gray-300'
                   }`}>
-                    {player.shipLevel === 3 ? '⚡ Laser Destroyer' :
+                    {player.shipLevel === 4 ? '🔥 Dual Laser Annihilator' :
+                     player.shipLevel === 3 ? '⚡ Laser Destroyer' :
                      player.shipLevel === 2 ? '💥 Multi-Shot Cruiser' : '🔹 Basic Fighter'}
                   </div>
                   
                   {/* Ship Level Indicator */}
                   <div className="flex space-x-1">
-                    {Array.from({ length: 3 }, (_, i) => (
+                    {Array.from({ length: 4 }, (_, i) => (
                       <motion.div
                         key={i}
                         initial={{ scale: 0 }}
@@ -268,7 +270,9 @@ export const HUD: React.FC = () => {
                         transition={{ delay: i * 0.1 }}
                         className={`w-4 h-3 rounded-sm border ${
                           i < player.shipLevel 
-                            ? player.shipLevel === 3 
+                            ? player.shipLevel === 4
+                              ? 'bg-pink-500 border-pink-400 shadow-pink-400/50'
+                              : player.shipLevel === 3 
                               ? 'bg-purple-500 border-purple-400 shadow-purple-400/50' 
                               : player.shipLevel === 2 
                               ? 'bg-cyan-500 border-cyan-400 shadow-cyan-400/50'
@@ -281,7 +285,8 @@ export const HUD: React.FC = () => {
                   
                   {/* Weapon Description */}
                   <div className="text-xs text-gray-400">
-                    {player.shipLevel === 3 ? 'Piercing Laser Beam' :
+                    {player.shipLevel === 4 ? 'Dual Piercing Laser Beams' :
+                     player.shipLevel === 3 ? 'Piercing Laser Beam' :
                      player.shipLevel === 2 ? 'Triple Shot Spread' : 'Single Projectile'}
                   </div>
                 </div>
