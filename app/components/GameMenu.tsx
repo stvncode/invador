@@ -11,22 +11,23 @@ import { useToast } from './ui/toast'
 export const GameMenu: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
+  const [musicStarted, setMusicStarted] = useState(false)
   const navigate = useNavigate()
   const { addToast } = useToast()
   
   const startGame = useGameStore(state => state.startGame)
   const resetGame = useGameStore(state => state.resetGame)
 
-  // Initialize audio and start background music
+  // Initialize audio but don't start music yet (browser restrictions)
   useEffect(() => {
     const initializeAudio = async () => {
       try {
         await soundManager.init()
-        soundManager.startBackgroundMusic()
         setAudioInitialized(true)
+        console.log('Audio system initialized successfully')
       } catch (error) {
         console.warn('Failed to initialize audio:', error)
-        // Don't show toast for audio init failure as it's not critical
+        setAudioInitialized(true) // Continue anyway
       }
     }
 
@@ -35,9 +36,27 @@ export const GameMenu: React.FC = () => {
     }
   }, [audioInitialized])
 
-  const handleStartGame = () => {
+  // Start background music after first user interaction
+  const startBackgroundMusic = async () => {
+    if (audioInitialized && !musicStarted) {
+      try {
+        soundManager.startBackgroundMusic()
+        setMusicStarted(true)
+        console.log('Background music started')
+      } catch (error) {
+        console.warn('Failed to start background music:', error)
+        // Don't show error to user for music - it's not critical
+      }
+    }
+  }
+
+  const handleStartGame = async () => {
     try {
       setIsLoading(true)
+      
+      // Start music on user interaction
+      await startBackgroundMusic()
+      
       resetGame()
       startGame()
       navigate('/')
@@ -60,7 +79,9 @@ export const GameMenu: React.FC = () => {
     }
   }
 
-  const handleSettings = () => {
+  const handleSettings = async () => {
+    // Start music on user interaction
+    await startBackgroundMusic()
     navigate('/settings')
   }
 

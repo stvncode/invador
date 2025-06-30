@@ -2,10 +2,20 @@ import * as Runtime from "effect/Runtime"
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { soundManager } from './audio'
+import {
+  calculateLevelFromScore,
+  getAttackPattern,
+  getAvailableEnemyTypes,
+  getEnemyStats,
+  getMaxEnemiesForLevel,
+  getMovementPattern,
+  getSpawnRate
+} from './levels'
 import { isColliding } from './services'
 import type {
   Bullet,
   Enemy,
+  EnemyType,
   Explosion,
   GameConfig,
   GameSettings,
@@ -25,6 +35,7 @@ interface GameStore {
   isPaused: boolean;
   gameTime: number;
   level: number;
+  lastLevelCheck: number; // Track when we last checked for level advancement
   
   // Entities
   player: Player;
@@ -57,6 +68,9 @@ interface GameStore {
   endGame: () => void;
   resetGame: () => void;
   
+  // Level Management
+  checkLevelAdvancement: () => void;
+  
   // Player Actions
   updatePlayer: (updates: Partial<Player>) => void;
   movePlayer: (direction: 'left' | 'right', deltaTime: number) => void;
@@ -67,6 +81,7 @@ interface GameStore {
   addEnemy: (enemy: Enemy) => void;
   removeEnemy: (id: string) => void;
   updateEnemies: (deltaTime: number) => void;
+  createEnemy: (type: EnemyType, x?: number, y?: number) => Enemy;
   
   addBullet: (bullet: Bullet) => void;
   removeBullet: (id: string) => void;
@@ -121,16 +136,17 @@ const DEFAULT_CONFIG: GameConfig = {
   enemies: {
     spawnRate: 2000,
     speed: 100,
-    maxOnScreen: 20,
+    maxOnScreen: 25,
   },
   bullets: {
     speed: 400,
-    maxOnScreen: 50,
+    maxOnScreen: 100,
   },
   difficulty: {
     level: 1,
     enemySpeedMultiplier: 1,
     enemySpawnRateMultiplier: 1,
+    enemyHealthMultiplier: 1,
     scoreMultiplier: 1,
   },
 };
@@ -169,6 +185,7 @@ const createInitialPlayer = (): Player => ({
   score: 0,
   lives: 3,
   weaponLevel: 1,
+  shipLevel: 1, // Start with basic ship
   invulnerable: false,
   invulnerabilityTime: 0,
 });
@@ -189,6 +206,8 @@ const initialStats: GameStats = {
   highestLevel: 0,
   totalPlayTime: 0,
   accuracy: 0,
+  bossesDefeated: 0,
+  perfectLevels: 0,
 };
 
 // Create Effect runtime for async operations
@@ -203,6 +222,7 @@ export const useGameStore = create<GameStore>()(
       isPaused: false,
       gameTime: 0,
       level: 1,
+      lastLevelCheck: 0,
       
       player: createInitialPlayer(),
       enemies: [],
@@ -214,67 +234,60 @@ export const useGameStore = create<GameStore>()(
       inputState: initialInputState,
       config: DEFAULT_CONFIG,
       settings: DEFAULT_SETTINGS,
+      
       highScores: [],
       stats: initialStats,
       
       lastFrameTime: 0,
       deltaTime: 0,
       lastSpawnTime: 0,
-      
+
+      // Game Control Actions
       startGame: () => {
         set({
           gameState: 'playing',
           isRunning: true,
           isPaused: false,
+          gameTime: 0,
+          level: 1,
           player: createInitialPlayer(),
           enemies: [],
           bullets: [],
           powerUps: [],
           particles: [],
           explosions: [],
+        });
+        get().checkLevelAdvancement();
+      },
+
+      pauseGame: () => set({ gameState: 'paused', isPaused: true }),
+      resumeGame: () => set({ gameState: 'playing', isPaused: false }),
+      endGame: () => set({ gameState: 'gameOver', isRunning: false }),
+      resetGame: () => {
+        set({
           gameTime: 0,
           level: 1,
-          inputState: initialInputState,
+          player: createInitialPlayer(),
+          enemies: [],
+          bullets: [],
+          powerUps: [],
+          particles: [],
+          explosions: [],
         });
+      },
+
+      // Level Management
+      checkLevelAdvancement: () => {
+        const { level, player } = get();
+        const nextLevel = calculateLevelFromScore(player.score);
         
-        // Start background music
-        soundManager.startBackgroundMusic();
+        if (nextLevel > level) {
+          console.log(`🎉 Level up! Advancing from ${level} to ${nextLevel} with ${player.score} points!`);
+          set({ level: nextLevel });
+          // Update stats
+          get().updateStats({ highestLevel: Math.max(get().stats.highestLevel, nextLevel) });
+        }
       },
-      
-      pauseGame: () => {
-        set({ gameState: 'paused', isPaused: true });
-        soundManager.stopBackgroundMusic();
-      },
-      
-      resumeGame: () => {
-        set({ gameState: 'playing', isPaused: false });
-        soundManager.startBackgroundMusic();
-      },
-      
-      endGame: () => {
-        set({ 
-          gameState: 'gameOver', 
-          isRunning: false,
-          isPaused: false,
-        });
-        soundManager.stopBackgroundMusic();
-        soundManager.playSound('explosion'); // Player death sound
-      },
-      
-      resetGame: () => set({
-        gameState: 'menu',
-        isRunning: false,
-        isPaused: false,
-        player: createInitialPlayer(),
-        enemies: [],
-        bullets: [],
-        powerUps: [],
-        particles: [],
-        explosions: [],
-        gameTime: 0,
-        level: 1,
-        inputState: initialInputState,
-      }),
       
       // Player Actions
       updatePlayer: (updates) => set((state) => ({
@@ -301,26 +314,118 @@ export const useGameStore = create<GameStore>()(
         const now = Date.now();
         
         if (bullets.filter(b => b.owner === 'player').length >= config.bullets.maxOnScreen) return;
-        if (now - get().lastFrameTime < 200) return; // Shooting cooldown
         
-        const bullet: Bullet = {
-          id: `bullet-${Date.now()}-${Math.random()}`,
-          position: {
-            x: player.position.x + player.size.width / 2 - 2,
-            y: player.position.y,
-          },
-          velocity: { x: 0, y: -config.bullets.speed },
-          size: { width: 4, height: 8 },
-          health: 1,
-          maxHealth: 1,
-          isActive: true,
-          damage: 25 * player.weaponLevel,
-          owner: 'player',
-          bulletType: 'basic',
-        };
+        // Different cooldowns for different ship levels
+        const cooldown = player.shipLevel === 3 ? 100 : 200; // Laser fires faster
+        if (now - get().lastFrameTime < cooldown) return;
         
-        get().addBullet(bullet);
-        get().incrementStat('totalBulletsFired');
+        const baseDamage = 25 * player.weaponLevel;
+        
+        // Different firing patterns based on ship level
+        switch (player.shipLevel) {
+          case 1: {
+            // Basic single shot
+            const bullet: Bullet = {
+              id: `bullet-${Date.now()}-${Math.random()}`,
+              position: {
+                x: player.position.x + player.size.width / 2 - 2,
+                y: player.position.y,
+              },
+              velocity: { x: 0, y: -config.bullets.speed },
+              size: { width: 4, height: 8 },
+              health: 1,
+              maxHealth: 1,
+              isActive: true,
+              damage: baseDamage,
+              owner: 'player',
+              bulletType: 'basic',
+              piercing: false,
+              explosive: false,
+            };
+            get().addBullet(bullet);
+            get().incrementStat('totalBulletsFired');
+            break;
+          }
+          
+          case 2: {
+            // Multi-shot: 3 bullets spread
+            const spreadAngle = 0.3; // Angle in radians
+            for (let i = 0; i < 3; i++) {
+              const angle = (i - 1) * spreadAngle; // -0.3, 0, 0.3 radians
+              const bullet: Bullet = {
+                id: `bullet-${Date.now()}-${Math.random()}-${i}`,
+                position: {
+                  x: player.position.x + player.size.width / 2 - 2,
+                  y: player.position.y,
+                },
+                velocity: { 
+                  x: Math.sin(angle) * config.bullets.speed * 0.5, 
+                  y: -Math.cos(angle) * config.bullets.speed 
+                },
+                size: { width: 3, height: 6 }, // Smaller bullets for multi-shot
+                health: 1,
+                maxHealth: 1,
+                isActive: true,
+                damage: baseDamage * 0.8, // Slightly less damage per bullet
+                owner: 'player',
+                bulletType: 'multi-shot',
+                piercing: false,
+                explosive: false,
+              };
+              get().addBullet(bullet);
+            }
+            get().incrementStat('totalBulletsFired', 3);
+            break;
+          }
+          
+          case 3: {
+            // Laser beam: Long piercing bullet
+            const bullet: Bullet = {
+              id: `laser-${Date.now()}-${Math.random()}`,
+              position: {
+                x: player.position.x + player.size.width / 2 - 1,
+                y: player.position.y,
+              },
+              velocity: { x: 0, y: -config.bullets.speed * 1.5 }, // Faster laser
+              size: { width: 2, height: 30 }, // Long laser beam
+              health: 1,
+              maxHealth: 1,
+              isActive: true,
+              damage: baseDamage * 1.5, // More damage
+              owner: 'player',
+              bulletType: 'laser',
+              piercing: true, // Laser can pierce through enemies
+              explosive: false,
+            };
+            get().addBullet(bullet);
+            get().incrementStat('totalBulletsFired');
+            break;
+          }
+          
+          default: {
+            // Fallback to basic shot
+            const bullet: Bullet = {
+              id: `bullet-${Date.now()}-${Math.random()}`,
+              position: {
+                x: player.position.x + player.size.width / 2 - 2,
+                y: player.position.y,
+              },
+              velocity: { x: 0, y: -config.bullets.speed },
+              size: { width: 4, height: 8 },
+              health: 1,
+              maxHealth: 1,
+              isActive: true,
+              damage: baseDamage,
+              owner: 'player',
+              bulletType: 'basic',
+              piercing: false,
+              explosive: false,
+            };
+            get().addBullet(bullet);
+            get().incrementStat('totalBulletsFired');
+          }
+        }
+        
         set({ lastFrameTime: now });
         
         // Play shoot sound
@@ -459,7 +564,8 @@ export const useGameStore = create<GameStore>()(
             lifetime: 0,
             maxLifetime: 500,
             color: powerUp.type === 'health' ? '#00ff00' : 
-                   powerUp.type === 'weapon' ? '#0000ff' : '#ffff00',
+                   powerUp.type === 'weapon' ? '#0000ff' : 
+                   powerUp.type === 'ship' ? '#ff00ff' : '#ffff00',
             alpha: 1,
           });
         }
@@ -515,7 +621,10 @@ export const useGameStore = create<GameStore>()(
         bullets.filter(b => b.owner === 'player').forEach(bullet => {
           enemies.forEach(enemy => {
             if (isColliding(bullet, enemy)) {
-              get().removeBullet(bullet.id);
+              // Only remove bullet if it's not piercing
+              if (!bullet.piercing) {
+                get().removeBullet(bullet.id);
+              }
               
               const newHealth = enemy.health - bullet.damage;
               if (newHealth <= 0) {
@@ -543,7 +652,7 @@ export const useGameStore = create<GameStore>()(
                 // Chance to spawn power-up (20% for normal enemies, 50% for boss)
                 const powerUpChance = enemy.type === 'boss' ? 0.5 : 0.2;
                 if (Math.random() < powerUpChance) {
-                  const powerUpTypes: Array<'health' | 'weapon' | 'shield'> = ['health', 'weapon', 'shield'];
+                  const powerUpTypes: Array<'health' | 'weapon' | 'shield' | 'ship'> = ['health', 'weapon', 'shield', 'ship'];
                   const powerUpType = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
                   
                   get().addPowerUp({
@@ -559,6 +668,7 @@ export const useGameStore = create<GameStore>()(
                     isActive: true,
                     type: powerUpType,
                     duration: 10000, // Power-up lasts 10 seconds on screen before disappearing
+                    rarity: 'common',
                   });
                 }
                 
@@ -625,7 +735,7 @@ export const useGameStore = create<GameStore>()(
                 break;
               case 'weapon':
                 get().updatePlayer({
-                  weaponLevel: Math.min(5, player.weaponLevel + 1)
+                  weaponLevel: Math.min(10, player.weaponLevel + 1)
                 });
                 break;
               case 'shield':
@@ -634,44 +744,98 @@ export const useGameStore = create<GameStore>()(
                   invulnerabilityTime: 5000
                 });
                 break;
+              case 'ship':
+                // Upgrade ship level (max level 3)
+                const newShipLevel = Math.min(3, player.shipLevel + 1);
+                get().updatePlayer({
+                  shipLevel: newShipLevel
+                });
+                
+                // Show upgrade message based on new ship level
+                const shipNames = ['', 'Basic Fighter', 'Multi-Shot Cruiser', 'Laser Destroyer'];
+                console.log(`🚀 Ship upgraded to Level ${newShipLevel}: ${shipNames[newShipLevel]}!`);
+                
+                // Create extra upgrade particles for ship upgrades
+                for (let i = 0; i < 8; i++) {
+                  get().addParticle({
+                    id: `ship-upgrade-particle-${Date.now()}-${i}`,
+                    position: {
+                      x: player.position.x + player.size.width / 2,
+                      y: player.position.y + player.size.height / 2,
+                    },
+                    velocity: {
+                      x: (Math.random() - 0.5) * 150,
+                      y: -Math.random() * 150 - 100,
+                    },
+                    size: { width: 4, height: 4 },
+                    health: 1,
+                    maxHealth: 1,
+                    isActive: true,
+                    lifetime: 0,
+                    maxLifetime: 1000,
+                    color: '#ff00ff',
+                    alpha: 1,
+                  });
+                }
+                break;
             }
           }
         });
       },
-      
+
+      // Entity Management
+      createEnemy: (type, x, y) => {
+        const { level, config } = get();
+        const stats = getEnemyStats(type, level);
+        const movementPattern = getMovementPattern(type);
+        const attackPattern = getAttackPattern(type);
+        
+        return {
+          id: `enemy-${Date.now()}-${Math.random()}`,
+          position: {
+            x: x ?? Math.random() * (config.canvas.width - (type.includes('boss') ? 80 : 35)),
+            y: y ?? -50,
+          },
+          velocity: { 
+            x: 0, 
+            y: stats.speed * config.difficulty.enemySpeedMultiplier * (1 / 60) 
+          },
+          size: type.includes('boss') ? { width: 80, height: 80 } : 
+                type === 'heavy' ? { width: 45, height: 45 } : 
+                { width: 35, height: 35 },
+          health: stats.health,
+          maxHealth: stats.health,
+          isActive: true,
+          type,
+          points: stats.points,
+          shootCooldown: type === 'shooter' ? 2000 : type.includes('boss') ? 1500 : 5000,
+          lastShot: 0,
+          movementPattern,
+          attackPattern,
+          level,
+          armor: stats.armor,
+          shield: stats.shield,
+          maxShield: stats.shield,
+          specialAbilityCharge: 100,
+          spawnTime: Date.now(),
+          lastAbilityUse: 0,
+        };
+      },
+
       spawnEnemies: (deltaTime) => {
-        const { enemies, config, level } = get();
+        const { enemies, level } = get();
         const now = Date.now();
         
-        if (enemies.length >= config.enemies.maxOnScreen) return;
+        const maxEnemies = getMaxEnemiesForLevel(level);
+        if (enemies.length >= maxEnemies) return;
         
-        const spawnRate = config.enemies.spawnRate / (1 + level * 0.1);
+        const spawnRate = getSpawnRate(level);
         
         if (!get().lastSpawnTime || now - get().lastSpawnTime > spawnRate) {
-          const enemyTypes: Array<'basic' | 'fast' | 'heavy' | 'shooter' | 'boss'> = ['basic', 'fast', 'heavy'];
-          if (level > 3) enemyTypes.push('shooter');
-          if (level > 5 && Math.random() < 0.1) enemyTypes.push('boss');
+          const availableTypes = getAvailableEnemyTypes(level);
+          const enemyType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
           
-          const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-          
-          const enemy: Enemy = {
-            id: `enemy-${Date.now()}-${Math.random()}`,
-            position: {
-              x: Math.random() * (config.canvas.width - 40),
-              y: -50,
-            },
-            velocity: { x: 0, y: config.enemies.speed * (1 + level * 0.1) },
-            size: enemyType === 'boss' ? { width: 60, height: 60 } : { width: 30, height: 30 },
-            health: enemyType === 'boss' ? 100 : enemyType === 'heavy' ? 50 : 25,
-            maxHealth: enemyType === 'boss' ? 100 : enemyType === 'heavy' ? 50 : 25,
-            isActive: true,
-            type: enemyType,
-            points: enemyType === 'boss' ? 500 : enemyType === 'heavy' ? 100 : 50,
-            shootCooldown: enemyType === 'shooter' ? 2000 : 5000,
-            lastShot: 0,
-            movementPattern: 'linear',
-          };
-          
+          const enemy = get().createEnemy(enemyType);
           get().addEnemy(enemy);
           set({ lastSpawnTime: now });
         }
@@ -680,6 +844,9 @@ export const useGameStore = create<GameStore>()(
       updateGameLogic: (deltaTime) => {
         const state = get();
         if (!state.isRunning || state.isPaused) return;
+        
+        // Check for automatic level advancement based on score
+        get().checkLevelAdvancement();
         
         // Update invulnerability
         if (state.player.invulnerable) {

@@ -32,13 +32,26 @@ export const Player = S.extend(Entity, S.Struct({
   score: S.Number,
   lives: S.Number,
   weaponLevel: S.Number,
+  shipLevel: S.Number, // 1, 2, or 3 for different ship tiers
   invulnerable: S.Boolean,
   invulnerabilityTime: S.Number,
 }));
 
-// Enemy types and patterns
-export const EnemyType = S.Literal("basic", "fast", "heavy", "shooter", "boss");
-export const MovementPattern = S.Literal("linear", "sine", "zigzag", "spiral", "stationary");
+// Enhanced enemy types and patterns
+export const EnemyType = S.Literal(
+  "basic", "fast", "heavy", "shooter", "kamikaze", "shielded", "regenerator",
+  "mini-boss", "boss", "mega-boss", "swarm", "elite"
+);
+
+export const MovementPattern = S.Literal(
+  "linear", "sine", "zigzag", "spiral", "stationary", "diagonal", 
+  "circle", "formation", "aggressive", "evasive", "teleport"
+);
+
+export const AttackPattern = S.Literal(
+  "none", "single", "burst", "spread", "homing", "laser", "missile",
+  "shield-break", "emp", "spawn-minions"
+);
 
 export const Enemy = S.extend(Entity, S.Struct({
   type: EnemyType,
@@ -46,24 +59,71 @@ export const Enemy = S.extend(Entity, S.Struct({
   shootCooldown: S.Number,
   lastShot: S.Number,
   movementPattern: MovementPattern,
+  attackPattern: AttackPattern,
+  level: S.Number,
+  armor: S.Number,
+  shield: S.Number,
+  maxShield: S.Number,
+  specialAbilityCharge: S.Number,
+  spawnTime: S.Number,
+  lastAbilityUse: S.Number,
 }));
 
+// Level progression system
+export const WaveType = S.Literal("normal", "elite", "boss", "survival", "swarm");
+
+export const EnemyWave = S.Struct({
+  type: WaveType,
+  enemies: S.Array(S.Struct({
+    type: EnemyType,
+    count: S.Number,
+    spawnDelay: S.Number,
+    formation: S.optional(S.String),
+  })),
+  duration: S.Number,
+  spawnRate: S.Number,
+  difficulty: S.Number,
+});
+
+export const LevelConfig = S.Struct({
+  levelNumber: S.Number,
+  name: S.String,
+  description: S.String,
+  waves: S.Array(EnemyWave),
+  bossWave: S.optional(EnemyWave),
+  requiredScore: S.Number,
+  timeLimit: S.optional(S.Number),
+  background: S.String,
+  music: S.String,
+  powerUpChance: S.Number,
+  difficultyMultiplier: S.Number,
+});
+
 // Bullet types
-export const BulletType = S.Literal("basic", "laser", "spread", "homing");
+export const BulletType = S.Literal(
+  "basic", "laser", "spread", "homing", "piercing", "explosive", "plasma", "energy", "multi-shot"
+);
 export const BulletOwner = S.Literal("player", "enemy");
 
 export const Bullet = S.extend(Entity, S.Struct({
   damage: S.Number,
   owner: BulletOwner,
   bulletType: BulletType,
+  piercing: S.Boolean,
+  explosive: S.Boolean,
+  homingTarget: S.optional(S.String),
 }));
 
-// Power-ups
-export const PowerUpType = S.Literal("health", "weapon", "shield", "multishot", "speed");
+// Enhanced power-ups
+export const PowerUpType = S.Literal(
+  "health", "weapon", "shield", "ship", "multishot", "speed", "rapid-fire", 
+  "piercing", "homing", "extra-life", "score-boost", "invincibility"
+);
 
 export const PowerUp = S.extend(Entity, S.Struct({
   type: PowerUpType,
   duration: S.Number,
+  rarity: S.Literal("common", "rare", "epic", "legendary"),
 }));
 
 // Particles for effects
@@ -87,9 +147,9 @@ export const Explosion = S.Struct({
 });
 
 // Game state management
-export const GameState = S.Literal("menu", "playing", "paused", "gameOver", "settings", "highScores");
+export const GameState = S.Literal("menu", "playing", "paused", "gameOver", "settings", "highScores", "levelTransition");
 
-// Game configuration
+// Enhanced game configuration
 export const GameConfig = S.Struct({
   canvas: S.Struct({
     width: S.Number,
@@ -114,6 +174,7 @@ export const GameConfig = S.Struct({
     level: S.Number,
     enemySpeedMultiplier: S.Number,
     enemySpawnRateMultiplier: S.Number,
+    enemyHealthMultiplier: S.Number,
     scoreMultiplier: S.Number,
   }),
 });
@@ -135,6 +196,8 @@ export const GameStats = S.Struct({
   highestLevel: S.Number,
   totalPlayTime: S.Number,
   accuracy: S.Number,
+  bossesDefeated: S.Number,
+  perfectLevels: S.Number,
 });
 
 // Input handling
@@ -174,6 +237,9 @@ export const GameData = S.Struct({
   isPaused: S.Boolean,
   gameTime: S.Number,
   level: S.Number,
+  currentWave: S.Number,
+  waveEnemiesRemaining: S.Number,
+  levelTransitionTime: S.Number,
   player: Player,
   enemies: S.Array(Enemy),
   bullets: S.Array(Bullet),
@@ -199,6 +265,7 @@ export type Enemy = S.Schema.Type<typeof Enemy>;
 export type Bullet = S.Schema.Type<typeof Bullet>;
 export type PowerUp = S.Schema.Type<typeof PowerUp>;
 export type Particle = S.Schema.Type<typeof Particle>;
+export type Explosion = S.Schema.Type<typeof Explosion>;
 export type GameState = S.Schema.Type<typeof GameState>;
 export type GameConfig = S.Schema.Type<typeof GameConfig>;
 export type HighScore = S.Schema.Type<typeof HighScore>;
@@ -209,7 +276,10 @@ export type GameSettings = S.Schema.Type<typeof GameSettings>;
 export type GameData = S.Schema.Type<typeof GameData>;
 export type EnemyType = S.Schema.Type<typeof EnemyType>;
 export type MovementPattern = S.Schema.Type<typeof MovementPattern>;
+export type AttackPattern = S.Schema.Type<typeof AttackPattern>;
 export type BulletType = S.Schema.Type<typeof BulletType>;
 export type BulletOwner = S.Schema.Type<typeof BulletOwner>;
 export type PowerUpType = S.Schema.Type<typeof PowerUpType>;
-export type Explosion = S.Schema.Type<typeof Explosion>; 
+export type WaveType = S.Schema.Type<typeof WaveType>;
+export type EnemyWave = S.Schema.Type<typeof EnemyWave>;
+export type LevelConfig = S.Schema.Type<typeof LevelConfig>; 

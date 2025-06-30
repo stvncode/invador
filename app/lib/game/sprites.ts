@@ -7,7 +7,16 @@ import * as Layer from "effect/Layer"
 
 // ===== Default Sprite Configurations =====
 export const defaultSpriteConfigs = [
+  // Player ship sprites - 3 tiers
+  { name: 'ship1', path: '/ship/ship1.png' },
+  { name: 'ship1-boost', path: '/ship/boost1.png' },
+  { name: 'ship2', path: '/ship/ship2.png' },
+  { name: 'ship2-boost', path: '/ship/boost2.png' },
+  { name: 'ship3', path: '/ship/ship3.png' },
+  { name: 'ship3-boost', path: '/ship/boost3.png' },
+  // Legacy fallback
   { name: 'player', path: '/ship.png' },
+  // Enemy sprites
   { name: 'boss', path: '/enemies/boss.png' },
   { name: 'basic-enemy', path: '/enemies/basic-enemy.png' },
   { name: 'fast-enemy', path: '/enemies/fast-enemy.png' },
@@ -17,6 +26,7 @@ export const defaultSpriteConfigs = [
   { name: 'health-powerup', path: '/power-up/health.png' },
   { name: 'shield-powerup', path: '/power-up/shield.png' },
   { name: 'weapon-powerup', path: '/power-up/weapon.png' },
+  { name: 'ship-powerup', path: '/power-up/ship.png' },
   // Explosion animation frames
   { name: 'explosion1', path: '/explosion/explosion.png' },
   { name: 'explosion2', path: '/explosion/explosion2.png' },
