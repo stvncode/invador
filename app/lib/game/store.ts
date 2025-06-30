@@ -51,7 +51,6 @@ interface GameStore {
   lastSpawnTime: number;
   
   // Actions
-  setGameState: (state: GameState) => void;
   startGame: () => void;
   pauseGame: () => void;
   resumeGame: () => void;
@@ -222,9 +221,6 @@ export const useGameStore = create<GameStore>()(
       deltaTime: 0,
       lastSpawnTime: 0,
       
-      // Game State Actions
-      setGameState: (state) => set({ gameState: state }),
-      
       startGame: () => {
         set({
           gameState: 'playing',
@@ -247,12 +243,12 @@ export const useGameStore = create<GameStore>()(
       
       pauseGame: () => {
         set({ gameState: 'paused', isPaused: true });
-        soundManager.pauseSound('level1-music');
+        soundManager.stopBackgroundMusic();
       },
       
       resumeGame: () => {
         set({ gameState: 'playing', isPaused: false });
-        soundManager.resumeSound('level1-music');
+        soundManager.startBackgroundMusic();
       },
       
       endGame: () => {

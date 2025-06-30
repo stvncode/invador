@@ -1,8 +1,7 @@
-import { motion } from 'framer-motion';
-import React, { useEffect, useState } from 'react';
-import { useGameStore } from '../lib/game/store';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
+import { motion } from 'framer-motion'
+import React, { useEffect, useState } from 'react'
+import { useGameStore } from '../lib/game/store'
+import { Button, Input } from './ui'
 
 export const GameOverScreen: React.FC = () => {
   const player = useGameStore(state => state.player);

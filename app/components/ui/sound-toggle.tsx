@@ -1,6 +1,6 @@
-import { motion } from 'framer-motion';
-import React, { useEffect, useState } from 'react';
-import { soundManager } from '../../lib/game/audio';
+import { motion } from 'framer-motion'
+import React, { useEffect, useState } from 'react'
+import { soundManager } from '../../lib/game/audio'
 
 interface SoundToggleProps {
   className?: string;
@@ -12,9 +12,12 @@ export const SoundToggle: React.FC<SoundToggleProps> = ({ className = '' }) => {
 
   useEffect(() => {
     // Get initial muted state
-    const currentMutedState = soundManager.isMuted()
-    setIsMuted(currentMutedState)
-    setIsLoading(false)
+    const loadInitialState = async () => {
+      const currentMutedState = await soundManager.isMuted()
+      setIsMuted(currentMutedState)
+      setIsLoading(false)
+    }
+    loadInitialState()
   }, [])
 
   const toggleSound = async () => {
@@ -32,8 +35,7 @@ export const SoundToggle: React.FC<SoundToggleProps> = ({ className = '' }) => {
   return (
     <motion.button
       onClick={toggleSound}
-      className={`relative w-12 h-12 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 
-                 hover:from-blue-500 hover:to-purple-500 shadow-lg transition-all duration-200 
+      className={`relative w-12 h-12 rounded-full  shadow-lg transition-all duration-200 
                  flex items-center justify-center overflow-hidden ${className}`}
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.95 }}

@@ -1,12 +1,14 @@
-import { motion } from 'framer-motion';
-import React from 'react';
-import { useGameStore } from '../lib/game/store';
-import { Button } from './ui/button';
+import { motion } from 'framer-motion'
+import React from 'react'
+import { useNavigate } from 'react-router'
+import { useGameStore } from '../lib/game/store'
+import { Button } from './ui'
 
 export const PauseMenu: React.FC = () => {
+  const navigate = useNavigate();
+  
   const resumeGame = useGameStore(state => state.resumeGame);
   const resetGame = useGameStore(state => state.resetGame);
-  const setGameState = useGameStore(state => state.setGameState);
   const player = useGameStore(state => state.player);
   const level = useGameStore(state => state.level);
 
@@ -67,7 +69,7 @@ export const PauseMenu: React.FC = () => {
           </Button>
 
           <Button
-            onClick={() => setGameState('settings')}
+            onClick={() => navigate('/settings')}
             variant="outline"
             className="w-full h-12 text-lg font-semibold border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black"
           >
