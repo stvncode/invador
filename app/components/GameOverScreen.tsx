@@ -1,7 +1,7 @@
-import { motion } from 'framer-motion'
-import React, { useEffect, useState } from 'react'
-import { useGameStore } from '../lib/game/store'
-import { Button, Input } from './ui'
+import { motion } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
+import { useGameStore } from '../lib/game/store';
+import { Button, Input } from './ui';
 
 export const GameOverScreen: React.FC = () => {
   const player = useGameStore(state => state.player);
@@ -40,7 +40,17 @@ export const GameOverScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-red-900 via-black to-purple-900">
+    <div 
+      className="flex items-center justify-center min-h-screen"
+      style={{
+        backgroundImage: 'url(/page-bg.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        imageRendering: 'pixelated',
+        backgroundColor: '#000000' // Fallback color
+      }}
+    >
       <motion.div 
         className="text-center space-y-6 p-8 max-w-2xl mx-4"
         initial={{ opacity: 0, y: 50 }}

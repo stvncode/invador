@@ -57,7 +57,17 @@ interface ErrorFallbackProps {
 
 export const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({ error, reset }) => {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-black via-red-900 to-purple-900">
+    <div 
+      className="flex items-center justify-center min-h-screen"
+      style={{
+        backgroundImage: 'url(/page-bg.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        imageRendering: 'pixelated',
+        backgroundColor: '#000000' // Fallback color
+      }}
+    >
       <motion.div 
         className="text-center space-y-6 p-8 max-w-md mx-4"
         initial={{ opacity: 0, y: 20 }}

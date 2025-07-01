@@ -155,7 +155,16 @@ export const HUD: React.FC = () => {
           className="relative"
         >
           {/* Main Stats Panel */}
-          <div className="bg-gradient-to-br from-black/80 via-blue-900/40 to-purple-900/30 backdrop-blur-xl rounded-2xl border border-cyan-400/30 shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-br from-black/80 via-blue-900/40 to-purple-900/30 backdrop-blur-xl rounded-2xl border border-cyan-400/30 shadow-2xl overflow-hidden relative">
+            {/* Background Image */}
+            <div 
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
+              style={{
+                backgroundImage: 'url(/hud-bg.png)',
+                imageRendering: 'pixelated'
+              }}
+            />
+            
             {/* Animated border glow */}
             <div className="absolute inset-0 bg-gradient-to-r from-cyan-400/20 via-transparent to-purple-400/20 animate-pulse" />
             
@@ -377,6 +386,121 @@ export const HUD: React.FC = () => {
                   )}
                 </div>
               </div>
+              
+              {/* Power-Up Effects */}
+              {(player.timeSlowActive || player.autoShootActive) && (
+                <div className="space-y-2 pt-2 border-t border-purple-400/20 relative">
+                  {/* Background Image */}
+                  <div 
+                    className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-10"
+                    style={{
+                      backgroundImage: 'url(/hud-bg.png)',
+                      imageRendering: 'pixelated'
+                    }}
+                  />
+                  
+                  <div className="relative z-10">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-purple-400 text-xs font-medium">✨</span>
+                      <span className="text-gray-300 text-xs uppercase tracking-wide">Active Effects</span>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {/* Time Slow Effect */}
+                      {player.timeSlowActive && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ 
+                            opacity: 1, 
+                            scale: player.timeSlowTime <= 3000 ? [1, 1.05, 1] : 1
+                          }}
+                          transition={{ 
+                            repeat: player.timeSlowTime <= 3000 ? Infinity : 0, 
+                            duration: 0.6 
+                          }}
+                          className={`p-2 rounded-lg border transition-all duration-300 ${
+                            player.timeSlowTime <= 3000 
+                              ? 'bg-gradient-to-r from-cyan-500/30 to-blue-600/30 border-cyan-400/70' 
+                              : 'bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-blue-400/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <span className={`font-medium ${
+                              player.timeSlowTime <= 3000 ? 'text-cyan-300' : 'text-blue-300'
+                            }`}>
+                              ⏰ Time Slow
+                            </span>
+                            <span className={`font-mono ${
+                              player.timeSlowTime <= 3000 ? 'text-cyan-200' : 'text-blue-200'
+                            }`}>
+                              {Math.ceil(player.timeSlowTime / 1000)}s
+                            </span>
+                          </div>
+                          <div className="mt-1 bg-black/50 rounded-full h-1 overflow-hidden">
+                            <motion.div
+                              className={`h-full transition-all duration-300 ${
+                                player.timeSlowTime <= 3000 
+                                  ? 'bg-gradient-to-r from-cyan-400 to-blue-500' 
+                                  : 'bg-gradient-to-r from-blue-400 to-cyan-400'
+                              }`}
+                              style={{ 
+                                width: `${Math.min(100, (player.timeSlowTime / 8000) * 100)}%` 
+                              }}
+                              transition={{ duration: 0.1 }}
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                      
+                      {/* Auto Shoot Effect */}
+                      {player.autoShootActive && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ 
+                            opacity: 1, 
+                            scale: player.autoShootTime <= 3000 ? [1, 1.05, 1] : 1
+                          }}
+                          transition={{ 
+                            repeat: player.autoShootTime <= 3000 ? Infinity : 0, 
+                            duration: 0.6 
+                          }}
+                          className={`p-2 rounded-lg border transition-all duration-300 ${
+                            player.autoShootTime <= 3000 
+                              ? 'bg-gradient-to-r from-orange-500/30 to-red-600/30 border-orange-400/70' 
+                              : 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-yellow-400/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <span className={`font-medium ${
+                              player.autoShootTime <= 3000 ? 'text-orange-300' : 'text-yellow-300'
+                            }`}>
+                              🎯 Auto Shoot
+                            </span>
+                            <span className={`font-mono ${
+                              player.autoShootTime <= 3000 ? 'text-orange-200' : 'text-yellow-200'
+                            }`}>
+                              {Math.ceil(player.autoShootTime / 1000)}s
+                            </span>
+                          </div>
+                          <div className="mt-1 bg-black/50 rounded-full h-1 overflow-hidden">
+                            <motion.div
+                              className={`h-full transition-all duration-300 ${
+                                player.autoShootTime <= 3000 
+                                  ? 'bg-gradient-to-r from-orange-400 to-red-500' 
+                                  : 'bg-gradient-to-r from-yellow-400 to-orange-400'
+                              }`}
+                              style={{ 
+                                width: `${Math.min(100, (player.autoShootTime / 10000) * 100)}%` 
+                              }}
+                              transition={{ duration: 0.1 }}
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -387,13 +511,22 @@ export const HUD: React.FC = () => {
             transition={{ delay: 0.2 }}
             className="mt-4"
           >
-            <div className={`bg-gradient-to-br backdrop-blur-xl rounded-xl border shadow-2xl overflow-hidden transition-all duration-300 ${
+            <div className={`bg-gradient-to-br backdrop-blur-xl rounded-xl border shadow-2xl overflow-hidden transition-all duration-300 relative ${
               isCriticalHealth 
                 ? 'from-red-900/80 via-red-800/40 to-black/30 border-red-400/50 shadow-red-500/50' 
                 : isLowHealth
                 ? 'from-yellow-900/80 via-orange-800/40 to-black/30 border-yellow-400/50 shadow-yellow-500/30'
                 : 'from-black/80 via-emerald-900/20 to-black/30 border-emerald-400/30 shadow-emerald-500/20'
             }`}>
+              {/* Background Image */}
+              <div 
+                className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
+                style={{
+                  backgroundImage: 'url(/hud-bg.png)',
+                  imageRendering: 'pixelated'
+                }}
+              />
+              
               {/* Animated border for critical health */}
               {isCriticalHealth && (
                 <div className="absolute inset-0 bg-gradient-to-r from-red-500/30 via-transparent to-red-500/30 animate-pulse" />

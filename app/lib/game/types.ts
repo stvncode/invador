@@ -1,4 +1,4 @@
-import * as S from "@effect/schema/Schema";
+import * as S from "@effect/schema/Schema"
 
 // Core geometric types
 export const Position = S.Struct({
@@ -36,6 +36,12 @@ export const Player = S.extend(Entity, S.Struct({
   shipUpgradeTime: S.Number, // Time remaining for temporary ship upgrade
   invulnerable: S.Boolean,
   invulnerabilityTime: S.Number,
+  // New power-up states
+  timeSlowActive: S.Boolean,
+  timeSlowTime: S.Number, // Time remaining for time slow effect
+  autoShootActive: S.Boolean,
+  autoShootTime: S.Number, // Time remaining for auto shoot effect
+  lastAutoShoot: S.Number, // Last time auto shoot fired
 }));
 
 // Enhanced enemy types and patterns
@@ -118,7 +124,8 @@ export const Bullet = S.extend(Entity, S.Struct({
 // Enhanced power-ups
 export const PowerUpType = S.Literal(
   "health", "weapon", "shield", "ship", "multishot", "speed", "rapid-fire", 
-  "piercing", "homing", "extra-life", "score-boost", "invincibility"
+  "piercing", "homing", "extra-life", "score-boost", "invincibility",
+  "time-slow", "auto-shoot", "blast"
 );
 
 export const PowerUp = S.extend(Entity, S.Struct({

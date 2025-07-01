@@ -169,7 +169,17 @@ export const Game: React.FC = () => {
 
   if (gameState === 'paused') {
     return (
-      <div className="relative w-full h-screen bg-black">
+      <div 
+        className="relative w-full h-screen"
+        style={{
+          backgroundImage: 'url(/page-bg.png)',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          imageRendering: 'pixelated',
+          backgroundColor: '#000000' // Fallback color
+        }}
+      >
         <GameCanvas />
         <PauseMenu />
       </div>
@@ -182,19 +192,21 @@ export const Game: React.FC = () => {
 
   // Main game screen
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden">
+    <div 
+      className="relative w-full h-screen"
+      style={{
+        backgroundImage: 'url(/page-bg.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        imageRendering: 'pixelated',
+        backgroundColor: '#000000' // Fallback color
+      }}
+    >
       <GameCanvas />
       <HUD />
-      
-      {/* Debug Panel */}
-      <UiDebugPanel 
-        isVisible={debugPanelVisible} 
-        onToggle={() => setDebugPanelVisible(!debugPanelVisible)} 
-      />
-      <UiDebugButton 
-        onToggle={() => setDebugPanelVisible(!debugPanelVisible)} 
-        isVisible={debugPanelVisible} 
-      />
+      <UiDebugButton onToggle={() => setDebugPanelVisible(!debugPanelVisible)} isVisible={debugPanelVisible} />
+      {debugPanelVisible && <UiDebugPanel isVisible={debugPanelVisible} onToggle={() => setDebugPanelVisible(!debugPanelVisible)} />}
       
       {/* Legacy Sound Debug - Only in development */}
       {process.env.NODE_ENV === 'development' && (
@@ -451,57 +463,56 @@ const GameCanvas: React.FC = () => {
       let fallbackColor = '#ff4444';
       let glowColor = '#ff4444';
       
-      switch (enemy.type) {
-        case 'boss':
+      match(enemy.type).with('boss', () => {
           spriteName = 'boss';
           fallbackColor = '#ff0000';
           glowColor = '#ff0000';
-          break;
-        case 'heavy':
+        })
+        .with('heavy', () => {
           spriteName = 'heavy-enemy';
           fallbackColor = '#ff6600';
           glowColor = '#ff6600';
-          break;
-        case 'fast':
+        })
+        .with('fast', () => {
           spriteName = 'fast-enemy';
           fallbackColor = '#ffff00';
           glowColor = '#ffff00';
-          break;
-        case 'shooter':
+        })
+        .with('shooter', () => {
           spriteName = 'shooter-enemy';
           fallbackColor = '#ff00ff';
           glowColor = '#ff00ff';
-          break;
-        case 'kamikaze':
+        })
+        .with('kamikaze', () => {
           spriteName = 'kamikaze-enemy';
           fallbackColor = '#ff4400';
           glowColor = '#ff4400';
-          break;
-        case 'shielded':
+        })
+        .with('shielded', () => {
           spriteName = 'shielded-enemy';
           fallbackColor = '#0088ff';
           glowColor = '#0088ff';
-          break;
-        case 'regenerator':
+        })
+        .with('regenerator', () => {
           spriteName = 'spliting-enemy';
           fallbackColor = '#8800ff';
           glowColor = '#8800ff';
-          break;
-        case 'swarm':
+        })
+        .with('swarm', () => {
           spriteName = 'basic-enemy';
           fallbackColor = '#ff4444';
           glowColor = '#ff4444';
-          break;
-        case 'elite':
+        })
+        .with('elite', () => {
           spriteName = 'heavy-enemy';
           fallbackColor = '#ff8800';
           glowColor = '#ff8800';
-          break;
-        default:
+        })
+        .otherwise(() => {
           spriteName = 'basic-enemy';
           fallbackColor = '#ff4444';
           glowColor = '#ff4444';
-      }
+        });
 
       if (!spriteManager.drawSprite(ctx, spriteName, enemy.position.x, enemy.position.y, enemy.size.width, enemy.size.height)) {
         // Retro enemy with subtle pulse
@@ -681,6 +692,21 @@ const GameCanvas: React.FC = () => {
           fallbackColor = '#ff00ff';
           glowColor = '#ff00ff';
           break;
+        case 'time-slow':
+          spriteName = 'time-slow-powerup';
+          fallbackColor = '#00ffff';
+          glowColor = '#00ffff';
+          break;
+        case 'auto-shoot':
+          spriteName = 'auto-shoot-powerup';
+          fallbackColor = '#ff8800';
+          glowColor = '#ff8800';
+          break;
+        case 'blast':
+          spriteName = 'blast-powerup';
+          fallbackColor = '#ff0066';
+          glowColor = '#ff0066';
+          break;
         default:
           fallbackColor = '#ffffff';
           glowColor = '#ffffff';
@@ -712,6 +738,20 @@ const GameCanvas: React.FC = () => {
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
     });
+
+    // Screen flash effect for blast power-up
+    const blastParticles = particles.filter(p => p.color === '#ff0066');
+    if (blastParticles.length > 0) {
+      const flashIntensity = Math.min(0.3, blastParticles.length * 0.05);
+      ctx.fillStyle = `rgba(255, 0, 102, ${flashIntensity})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    // Time slow effect - subtle blue tint
+    if (player.timeSlowActive) {
+      ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+      ctx.fillRect(0, 0, width, height);
+    }
 
     // Fixed explosions with proper radius checking
     explosions.forEach((explosion) => {

@@ -86,7 +86,17 @@ export const GameMenu: React.FC = () => {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-black via-blue-900 to-purple-900 text-white relative overflow-hidden">
+    <div 
+      className="flex items-center justify-center min-h-screen text-white relative overflow-hidden"
+      style={{
+        backgroundImage: 'url(/home-bg.png)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        imageRendering: 'pixelated',
+        backgroundColor: '#000000' // Fallback color
+      }}
+    >
       {/* Background Animation */}
       <div className="absolute inset-0">
         {Array.from({ length: 50 }, (_, i) => (
@@ -147,28 +157,52 @@ export const GameMenu: React.FC = () => {
 
         {/* Menu Buttons */}
         <motion.div 
-          className="space-y-4"
+          className="space-y-6"
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.3 }}
         >
-          <Button
-            onClick={handleStartGame}
-            disabled={isLoading}
-            size="lg"
-            className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-black font-bold text-lg py-4"
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
-            {isLoading ? 'Starting...' : '🚀 START GAME'}
-          </Button>
+            <Button
+              onClick={handleStartGame}
+              disabled={isLoading}
+              size="lg"
+              className="w-full h-16 bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 hover:from-purple-700 hover:via-pink-700 hover:to-red-700 text-white font-bold text-xl py-6 shadow-2xl shadow-purple-500/30 border-2 border-purple-400/50 backdrop-blur-sm relative overflow-hidden group"
+            >
+              {/* Animated background effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+              
+              {/* Button content */}
+              <span className="relative z-10 flex items-center justify-center">
+                <span>{isLoading ? 'Starting...' : 'START GAME'}</span>
+              </span>
+            </Button>
+          </motion.div>
           
-          <Button
-            onClick={handleSettings}
-            variant="outline"
-            size="lg"
-            className="w-full border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black font-bold text-lg py-4"
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
-            ⚙️ SETTINGS
-          </Button>
+            <Button
+              onClick={handleSettings}
+              variant="outline"
+              size="lg"
+              className="w-full h-16 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-indigo-500/20 hover:from-cyan-500/30 hover:via-blue-500/30 hover:to-indigo-500/30 border-2 border-cyan-400/50 text-cyan-300 hover:text-cyan-200 font-bold text-xl py-6 shadow-2xl shadow-cyan-500/20 backdrop-blur-md relative overflow-hidden group"
+            >
+              {/* Animated border effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-cyan-400/20 via-blue-400/20 to-indigo-400/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              
+              {/* Button content */}
+              <span className="relative z-10 flex items-center justify-center">
+                <span>SETTINGS</span>
+              </span>
+            </Button>
+          </motion.div>
         </motion.div>
 
         {/* Sound Toggle */}

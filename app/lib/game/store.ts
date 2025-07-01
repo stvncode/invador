@@ -192,6 +192,12 @@ const createInitialPlayer = (): Player => ({
   shipUpgradeTime: 0, // No upgrade active initially
   invulnerable: false,
   invulnerabilityTime: 0,
+  // New power-up states
+  timeSlowActive: false,
+  timeSlowTime: 0,
+  autoShootActive: false,
+  autoShootTime: 0,
+  lastAutoShoot: 0,
 });
 
 const initialInputState: InputState = {
@@ -744,7 +750,10 @@ export const useGameStore = create<GameStore>()(
             maxLifetime: 500,
             color: powerUp.type === 'health' ? '#00ff00' : 
                    powerUp.type === 'weapon' ? '#0000ff' : 
-                   powerUp.type === 'ship' ? '#ff00ff' : '#ffff00',
+                   powerUp.type === 'ship' ? '#ff00ff' : 
+                   powerUp.type === 'time-slow' ? '#00ffff' :
+                   powerUp.type === 'auto-shoot' ? '#ff8800' :
+                   powerUp.type === 'blast' ? '#ff0066' : '#ffff00',
             alpha: 1,
           });
         }
@@ -883,7 +892,9 @@ export const useGameStore = create<GameStore>()(
                 // Chance to spawn power-up (20% for normal enemies, 50% for boss)
                 const powerUpChance = enemy.type === 'boss' ? 0.5 : 0.2;
                 if (Math.random() < powerUpChance) {
-                  const powerUpTypes: Array<'health' | 'weapon' | 'shield' | 'ship'> = ['health', 'weapon', 'shield', 'ship'];
+                  const powerUpTypes: Array<'health' | 'weapon' | 'shield' | 'ship' | 'time-slow' | 'auto-shoot' | 'blast'> = [
+                    'health', 'weapon', 'shield', 'ship', 'time-slow', 'auto-shoot', 'blast'
+                  ];
                   const powerUpType = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
                   
                   get().addPowerUp({
@@ -1027,6 +1038,84 @@ export const useGameStore = create<GameStore>()(
                   });
                 }
               })
+              .with('time-slow', () => {
+                // Time slow effect - slows down enemy movement and bullet speed
+                const timeSlowDuration = 8000; // 8 seconds
+                get().updatePlayer({
+                  timeSlowActive: true,
+                  timeSlowTime: timeSlowDuration
+                });
+                console.log(`⏰ Time slow activated for ${Math.round(timeSlowDuration/1000)}s!`);
+              })
+              .with('auto-shoot', () => {
+                // Auto shoot effect - automatically fires bullets
+                const autoShootDuration = 10000; // 10 seconds
+                get().updatePlayer({
+                  autoShootActive: true,
+                  autoShootTime: autoShootDuration,
+                  lastAutoShoot: Date.now()
+                });
+                console.log(`🎯 Auto-shoot activated for ${Math.round(autoShootDuration/1000)}s!`);
+              })
+              .with('blast', () => {
+                // Blast effect - destroys all enemies on screen
+                const enemies = get().enemies;
+                console.log(`💥 Blast power-up! Destroying ${enemies.length} enemies!`);
+                
+                // Destroy all enemies and add points
+                enemies.forEach(enemy => {
+                  get().updatePlayer({ 
+                    score: player.score + enemy.points 
+                  });
+                  get().incrementStat('totalEnemiesDestroyed');
+                  
+                  // Create explosion for each enemy
+                  get().addExplosion({
+                    id: `blast-explosion-${Date.now()}-${Math.random()}`,
+                    position: {
+                      x: enemy.position.x + enemy.size.width / 2 - 32,
+                      y: enemy.position.y + enemy.size.height / 2 - 32,
+                    },
+                    size: { width: 64, height: 64 },
+                    currentFrame: 0,
+                    totalFrames: 7,
+                    frameTime: 80,
+                    lifetime: 0,
+                    isActive: true,
+                  });
+                  
+                  // Create particles for each enemy
+                  for (let i = 0; i < 3; i++) {
+                    get().addParticle({
+                      id: `blast-particle-${Date.now()}-${Math.random()}-${i}`,
+                      position: {
+                        x: enemy.position.x + enemy.size.width / 2,
+                        y: enemy.position.y + enemy.size.height / 2,
+                      },
+                      velocity: {
+                        x: (Math.random() - 0.5) * 200,
+                        y: (Math.random() - 0.5) * 200,
+                      },
+                      size: { width: 3, height: 3 },
+                      health: 1,
+                      maxHealth: 1,
+                      isActive: true,
+                      lifetime: 0,
+                      maxLifetime: 600,
+                      color: '#ff6600',
+                      alpha: 1,
+                    });
+                  }
+                });
+                
+                // Clear all enemies
+                set((state) => ({ enemies: [] }));
+                
+                // Play explosion sound multiple times for dramatic effect
+                for (let i = 0; i < Math.min(enemies.length, 3); i++) {
+                  setTimeout(() => soundManager.playSound('explosion'), i * 100);
+                }
+              })
               .otherwise(() => {});
           }
         });
@@ -1145,13 +1234,52 @@ export const useGameStore = create<GameStore>()(
           }
         }
         
-        get().updateEnemies(deltaTime);
-        get().updateBullets(deltaTime);
-        get().updatePowerUps(deltaTime);
-        get().updateParticles(deltaTime);
-        get().updateExplosions(deltaTime);
+        // Update new power-up timers
+        if (player.timeSlowTime > 0) {
+          const newTimeSlowTime = Math.max(0, player.timeSlowTime - deltaTime);
+          if (newTimeSlowTime === 0) {
+            get().updatePlayer({ 
+              timeSlowActive: false, 
+              timeSlowTime: 0 
+            });
+            console.log('⏰ Time slow effect expired');
+          } else {
+            get().updatePlayer({ timeSlowTime: newTimeSlowTime });
+          }
+        }
+        
+        if (player.autoShootTime > 0) {
+          const newAutoShootTime = Math.max(0, player.autoShootTime - deltaTime);
+          if (newAutoShootTime === 0) {
+            get().updatePlayer({ 
+              autoShootActive: false, 
+              autoShootTime: 0 
+            });
+            console.log('🎯 Auto-shoot effect expired');
+          } else {
+            get().updatePlayer({ autoShootTime: newAutoShootTime });
+            
+            // Auto-shoot logic
+            const now = Date.now();
+            const autoShootCooldown = 300; // Fire every 300ms
+            if (now - player.lastAutoShoot >= autoShootCooldown) {
+              get().playerShoot();
+              get().updatePlayer({ lastAutoShoot: now });
+            }
+          }
+        }
+        
+        // Apply time slow effect to enemies and bullets
+        const timeSlowMultiplier = player.timeSlowActive ? 0.3 : 1.0;
+        const adjustedDeltaTime = deltaTime * timeSlowMultiplier;
+        
+        get().updateEnemies(adjustedDeltaTime);
+        get().updateBullets(adjustedDeltaTime);
+        get().updatePowerUps(deltaTime); // Power-ups don't slow down
+        get().updateParticles(deltaTime); // Particles don't slow down
+        get().updateExplosions(deltaTime); // Explosions don't slow down
         get().checkCollisions();
-        get().spawnEnemies(deltaTime);
+        get().spawnEnemies(deltaTime); // Spawning doesn't slow down
       },
       
       // Input Management

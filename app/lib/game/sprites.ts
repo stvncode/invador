@@ -32,6 +32,9 @@ export const defaultSpriteConfigs = [
   { name: 'shield-powerup', path: '/power-up/shield.png' },
   { name: 'weapon-powerup', path: '/power-up/weapon.png' },
   { name: 'ship-powerup', path: '/power-up/ship.png' },
+  { name: 'time-slow-powerup', path: '/power-up/time-slow.png' },
+  { name: 'auto-shoot-powerup', path: '/power-up/auto-shoot.png' },
+  { name: 'blast-powerup', path: '/power-up/blast.png' },
   // Explosion animation frames
   { name: 'explosion1', path: '/explosion/explosion.png' },
   { name: 'explosion2', path: '/explosion/explosion2.png' },
@@ -42,6 +45,9 @@ export const defaultSpriteConfigs = [
   { name: 'explosion7', path: '/explosion/explosion7.png' },
   // UI assets
   { name: 'logo', path: '/logo.png' },
+  { name: 'home-bg', path: '/home-bg.png' },
+  { name: 'hud-bg', path: '/hud-bg.png' },
+  { name: 'page-bg', path: '/page-bg.png' },
 ]
 
 export interface SpriteInfo {
