@@ -24,6 +24,9 @@ export const defaultSpriteConfigs = [
   { name: 'fast-enemy', path: '/enemies/fast-enemy.png' },
   { name: 'shooter-enemy', path: '/enemies/shooter-enemy.png' },
   { name: 'heavy-enemy', path: '/enemies/heavy-enemy.png' },
+  { name: 'kamikaze-enemy', path: '/enemies/kamikaze.png' },
+  { name: 'shielded-enemy', path: '/enemies/shielded.png' },
+  { name: 'spliting-enemy', path: '/enemies/spliting.png' },
   // Power-up sprites
   { name: 'health-powerup', path: '/power-up/health.png' },
   { name: 'shield-powerup', path: '/power-up/shield.png' },

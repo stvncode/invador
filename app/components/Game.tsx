@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { match } from 'ts-pattern'
 import { soundManager } from '../lib/game/audio'
+import { PerformanceOperations } from '../lib/game/performance'
 import { spriteManager } from '../lib/game/sprites'
 import { useGameStore } from '../lib/game/store'
 import { GameMenu } from './GameMenu'
 import { GameOverScreen } from './GameOverScreen'
 import { HUD } from './HUD'
 import { PauseMenu } from './PauseMenu'
+import { DebugButton as UiDebugButton, DebugPanel as UiDebugPanel } from './ui/debug-panel'
 
 export const Game: React.FC = () => {
   const gameState = useGameStore(state => state.gameState);
@@ -33,6 +35,7 @@ export const Game: React.FC = () => {
   const [spritesLoaded, setSpritesLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(true)
   const [soundDebug, setSoundDebug] = useState(false)
+  const [debugPanelVisible, setDebugPanelVisible] = useState(false)
 
 
   // Initialize sound system and sprites
@@ -46,6 +49,14 @@ export const Game: React.FC = () => {
         // Then initialize sprites
         await spriteManager.loadAllSprites()
         console.log('Sprites loaded')
+        
+        // Start performance monitoring
+        try {
+          await PerformanceOperations.startPerformanceMonitoring()
+          console.log('Performance monitoring started')
+        } catch (error) {
+          console.warn('Failed to start performance monitoring:', error)
+        }
         
         setSpritesLoaded(true)
         setIsLoading(false)
@@ -89,6 +100,14 @@ export const Game: React.FC = () => {
 
     // Update game logic
     updateGameLogic(deltaTime);
+
+    // Record performance metrics
+    try {
+      PerformanceOperations.recordFrame(deltaTime)
+      PerformanceOperations.recordEntities(enemies.length + bullets.length + powerUps.length + particles.length)
+    } catch (error) {
+      // Silently fail performance recording
+    }
 
     animationFrameRef.current = requestAnimationFrame((timestamp) => gameLoop(timestamp));
   }, [isRunning, isPaused, inputState, movePlayer, playerShoot, updateGameLogic]);
@@ -167,9 +186,17 @@ export const Game: React.FC = () => {
       <GameCanvas />
       <HUD />
       
-
+      {/* Debug Panel */}
+      <UiDebugPanel 
+        isVisible={debugPanelVisible} 
+        onToggle={() => setDebugPanelVisible(!debugPanelVisible)} 
+      />
+      <UiDebugButton 
+        onToggle={() => setDebugPanelVisible(!debugPanelVisible)} 
+        isVisible={debugPanelVisible} 
+      />
       
-      {/* Debug Panel - Only in development */}
+      {/* Legacy Sound Debug - Only in development */}
       {process.env.NODE_ENV === 'development' && (
         <div className="absolute bottom-4 left-4 z-20">
           <button
@@ -445,6 +472,31 @@ const GameCanvas: React.FC = () => {
           fallbackColor = '#ff00ff';
           glowColor = '#ff00ff';
           break;
+        case 'kamikaze':
+          spriteName = 'kamikaze-enemy';
+          fallbackColor = '#ff4400';
+          glowColor = '#ff4400';
+          break;
+        case 'shielded':
+          spriteName = 'shielded-enemy';
+          fallbackColor = '#0088ff';
+          glowColor = '#0088ff';
+          break;
+        case 'regenerator':
+          spriteName = 'spliting-enemy';
+          fallbackColor = '#8800ff';
+          glowColor = '#8800ff';
+          break;
+        case 'swarm':
+          spriteName = 'basic-enemy';
+          fallbackColor = '#ff4444';
+          glowColor = '#ff4444';
+          break;
+        case 'elite':
+          spriteName = 'heavy-enemy';
+          fallbackColor = '#ff8800';
+          glowColor = '#ff8800';
+          break;
         default:
           spriteName = 'basic-enemy';
           fallbackColor = '#ff4444';
@@ -479,6 +531,36 @@ const GameCanvas: React.FC = () => {
         
         ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : healthPercent > 0.2 ? '#ffff00' : '#ff0000';
         ctx.fillRect(enemy.position.x, barY, barWidth * healthPercent, barHeight);
+      }
+      
+      // Shield visualization for shielded enemies
+      if (enemy.shield > 0 && enemy.maxShield > 0) {
+        const shieldPercent = enemy.shield / enemy.maxShield;
+        const shieldRadius = Math.max(enemy.size.width, enemy.size.height) * 0.7;
+        const shieldX = enemy.position.x + enemy.size.width / 2;
+        const shieldY = enemy.position.y + enemy.size.height / 2;
+        
+        // Shield glow effect
+        ctx.shadowColor = '#0088ff';
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = '#0088ff';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = shieldPercent * 0.8;
+        
+        ctx.beginPath();
+        ctx.arc(shieldX, shieldY, shieldRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Shield pulse effect
+        const pulseIntensity = Math.sin(time * 4) * 0.2 + 0.8;
+        ctx.globalAlpha = shieldPercent * pulseIntensity * 0.4;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(shieldX, shieldY, shieldRadius + 2, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
       }
     });
 

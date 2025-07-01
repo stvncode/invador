@@ -281,7 +281,8 @@ export const AudioServiceLayer = Layer.effect(AudioService, makeAudioService())
 // ===== Default Sound Configurations =====
 export const defaultSoundConfigs: readonly SoundConfig[] = [
   { name: 'shoot', path: '/sounds/shoot.wav', volume: 0.3 },
-  { name: 'explosion', path: '/sounds/explosion.mp3', volume: 0.8 },
+  { name: 'explosion', path: '/sounds/explosion.mp3', volume: 0.3 },
+  { name: 'boss-explosion', path: '/sounds/boss-explosion.mp3', volume: 1.0 },
   { name: 'low-health', path: '/sounds/low-health.mp3', volume: 0.7 },
   { name: 'power-up', path: '/sounds/power-up.mp3', volume: 0.5 },
   { name: 'level1-music', path: '/sounds/level1.mp3', volume: 0.4, loop: true },

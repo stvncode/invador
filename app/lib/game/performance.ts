@@ -3,6 +3,16 @@
  * Includes FPS monitoring, memory management, and rendering optimizations
  */
 
+import * as Context from "effect/Context"
+import * as Duration from "effect/Duration"
+import * as Effect from "effect/Effect"
+import * as Layer from "effect/Layer"
+import * as Metric from "effect/Metric"
+import * as MetricBoundaries from "effect/MetricBoundaries"
+import * as Ref from "effect/Ref"
+import * as Schedule from "effect/Schedule"
+import * as Stream from "effect/Stream"
+
 interface PerformanceMetrics {
   fps: number
   frameTime: number
@@ -259,3 +269,296 @@ export const particleOptimizer = new ParticleOptimizer()
 
 export { ObjectPool, ParticleOptimizer, PerformanceMonitor, RenderOptimizer }
 export type { PerformanceConfig, PerformanceMetrics }
+
+// ===== Performance Error Types =====
+export interface PerformanceError {
+  readonly _tag: "PerformanceError"
+  readonly message: string
+  readonly cause?: unknown
+}
+
+export const createPerformanceError = (message: string, cause?: unknown): PerformanceError => ({
+  _tag: "PerformanceError" as const,
+  message,
+  cause,
+})
+
+// ===== Performance Data Types =====
+export interface PerformanceData {
+  readonly timestamp: number
+  readonly frameTime: number
+  readonly memoryUsage: number
+  readonly entityCount: number
+  readonly fps: number
+  readonly cpuUsage: number
+}
+
+export interface PerformanceStats {
+  readonly averageFPS: number
+  readonly averageFrameTime: number
+  readonly peakMemoryUsage: number
+  readonly currentMemoryUsage: number
+  readonly totalFrames: number
+  readonly droppedFrames: number
+  readonly performanceScore: number
+}
+
+export interface PerformanceAlert {
+  readonly type: "low_fps" | "high_memory" | "frame_drop" | "cpu_spike"
+  readonly severity: "warning" | "critical"
+  readonly message: string
+  readonly timestamp: number
+  readonly data: PerformanceData
+}
+
+// ===== Performance Metrics =====
+export const frameTimeMetric = Metric.histogram("frame_time", MetricBoundaries.linear({ start: 0, width: 100, count: 20 }))
+export const memoryUsageMetric = Metric.gauge("memory_usage")
+export const fpsMetric = Metric.gauge("fps")
+export const entityCountMetric = Metric.gauge("entity_count")
+export const cpuUsageMetric = Metric.gauge("cpu_usage")
+export const droppedFramesMetric = Metric.counter("dropped_frames")
+
+// ===== Performance Service Interface =====
+export interface PerformanceService {
+  readonly recordFrameTime: (deltaTime: number) => Effect.Effect<void, PerformanceError>
+  readonly recordMemoryUsage: () => Effect.Effect<void, PerformanceError>
+  readonly recordEntityCount: (count: number) => Effect.Effect<void, PerformanceError>
+  readonly getPerformanceStats: () => Effect.Effect<PerformanceStats, PerformanceError>
+  readonly alertOnPerformanceIssue: () => Stream.Stream<PerformanceAlert, PerformanceError>
+  readonly startMonitoring: () => Effect.Effect<void, PerformanceError>
+  readonly stopMonitoring: () => Effect.Effect<void, PerformanceError>
+}
+
+export const PerformanceService = Context.GenericTag<PerformanceService>("PerformanceService")
+
+// ===== Performance Service Implementation =====
+const makePerformanceService = (): Effect.Effect<PerformanceService, never> =>
+  Effect.gen(function* (_) {
+    const statsRef = yield* _(Ref.make<PerformanceStats>({
+      averageFPS: 0,
+      averageFrameTime: 0,
+      peakMemoryUsage: 0,
+      currentMemoryUsage: 0,
+      totalFrames: 0,
+      droppedFrames: 0,
+      performanceScore: 100,
+    }))
+
+    const frameTimesRef = yield* _(Ref.make<number[]>([]))
+    const isMonitoringRef = yield* _(Ref.make(false))
+
+    const calculateFPS = (frameTime: number) => {
+      return frameTime > 0 ? 1000 / frameTime : 0
+    }
+
+    const updateStats = (frameTime: number, memoryUsage: number, entityCount: number) =>
+      Effect.gen(function* (_) {
+        const fps = calculateFPS(frameTime)
+        const currentStats = yield* _(Ref.get(statsRef))
+        const frameTimes = yield* _(Ref.get(frameTimesRef))
+
+        // Update frame times array (keep last 60 frames)
+        const newFrameTimes = [...frameTimes, frameTime].slice(-60)
+        yield* _(Ref.set(frameTimesRef, newFrameTimes))
+
+        // Calculate averages
+        const averageFrameTime = newFrameTimes.reduce((sum, time) => sum + time, 0) / newFrameTimes.length
+        const averageFPS = calculateFPS(averageFrameTime)
+
+        // Check for dropped frames (frame time > 33ms = < 30 FPS)
+        const droppedFrames = frameTime > 33 ? currentStats.droppedFrames + 1 : currentStats.droppedFrames
+
+        // Calculate performance score (0-100)
+        const fpsScore = Math.min(100, (fps / 60) * 100)
+        const memoryScore = Math.max(0, 100 - (memoryUsage / 100)) // Assuming 100MB is max
+        const performanceScore = Math.round((fpsScore + memoryScore) / 2)
+
+        const newStats: PerformanceStats = {
+          averageFPS,
+          averageFrameTime,
+          peakMemoryUsage: Math.max(currentStats.peakMemoryUsage, memoryUsage),
+          currentMemoryUsage: memoryUsage,
+          totalFrames: currentStats.totalFrames + 1,
+          droppedFrames,
+          performanceScore,
+        }
+
+        yield* _(Ref.set(statsRef, newStats))
+
+        // Update metrics
+        yield* _(Metric.update(frameTimeMetric, frameTime))
+        yield* _(Metric.set(memoryUsageMetric, memoryUsage))
+        yield* _(Metric.set(fpsMetric, fps))
+        yield* _(Metric.set(entityCountMetric, entityCount))
+        if (frameTime > 33) {
+          yield* _(Metric.increment(droppedFramesMetric))
+        }
+      })
+
+    const recordFrameTime = (deltaTime: number) =>
+      Effect.gen(function* (_) {
+        const isMonitoring = yield* _(Ref.get(isMonitoringRef))
+        if (!isMonitoring) return
+
+        // Simulate memory usage for demo
+        const memoryUsage = Math.random() * 50 + 20 // 20-70MB
+
+        yield* _(updateStats(deltaTime, memoryUsage, 0)) // Entity count will be updated separately
+      })
+
+    const recordMemoryUsage = () =>
+      Effect.gen(function* (_) {
+        const isMonitoring = yield* _(Ref.get(isMonitoringRef))
+        if (!isMonitoring) return
+
+        const memoryUsage = Math.random() * 50 + 20 // Simulated memory usage
+
+        yield* _(Metric.set(memoryUsageMetric, memoryUsage))
+        
+        const currentStats = yield* _(Ref.get(statsRef))
+        yield* _(Ref.set(statsRef, {
+          ...currentStats,
+          currentMemoryUsage: memoryUsage,
+          peakMemoryUsage: Math.max(currentStats.peakMemoryUsage, memoryUsage),
+        }))
+      })
+
+    const recordEntityCount = (count: number) =>
+      Effect.gen(function* (_) {
+        const isMonitoring = yield* _(Ref.get(isMonitoringRef))
+        if (!isMonitoring) return
+
+        yield* _(Metric.set(entityCountMetric, count))
+      })
+
+    const getPerformanceStats = () =>
+      Effect.gen(function* (_) {
+        return yield* _(Ref.get(statsRef))
+      })
+
+    const alertOnPerformanceIssue = () =>
+      Stream.fromEffect(Ref.get(statsRef)).pipe(
+        Stream.repeat(Schedule.fixed(Duration.seconds(1))),
+        Stream.flatMap(stats => {
+          const alerts: PerformanceAlert[] = []
+          
+          if (stats.averageFPS < 30) {
+            alerts.push({
+              type: "low_fps",
+              severity: stats.averageFPS < 20 ? "critical" : "warning",
+              message: `Low FPS detected: ${stats.averageFPS.toFixed(1)} FPS`,
+              timestamp: Date.now(),
+              data: {
+                timestamp: Date.now(),
+                frameTime: stats.averageFrameTime,
+                memoryUsage: stats.currentMemoryUsage,
+                entityCount: 0,
+                fps: stats.averageFPS,
+                cpuUsage: 0,
+              }
+            })
+          }
+
+          if (stats.currentMemoryUsage > 80) {
+            alerts.push({
+              type: "high_memory",
+              severity: stats.currentMemoryUsage > 95 ? "critical" : "warning",
+              message: `High memory usage: ${stats.currentMemoryUsage.toFixed(1)}MB`,
+              timestamp: Date.now(),
+              data: {
+                timestamp: Date.now(),
+                frameTime: stats.averageFrameTime,
+                memoryUsage: stats.currentMemoryUsage,
+                entityCount: 0,
+                fps: stats.averageFPS,
+                cpuUsage: 0,
+              }
+            })
+          }
+
+          if (stats.droppedFrames > 10) {
+            alerts.push({
+              type: "frame_drop",
+              severity: "warning",
+              message: `Frame drops detected: ${stats.droppedFrames} dropped frames`,
+              timestamp: Date.now(),
+              data: {
+                timestamp: Date.now(),
+                frameTime: stats.averageFrameTime,
+                memoryUsage: stats.currentMemoryUsage,
+                entityCount: 0,
+                fps: stats.averageFPS,
+                cpuUsage: 0,
+              }
+            })
+          }
+
+          return Stream.fromIterable(alerts)
+        }),
+        Stream.tap(alert => Effect.log(`⚠️ Performance Alert: ${alert.message}`))
+      )
+
+    const startMonitoring = () =>
+      Effect.gen(function* (_) {
+        yield* _(Ref.set(isMonitoringRef, true))
+        yield* _(Effect.log("📊 Performance monitoring started"))
+      })
+
+    const stopMonitoring = () =>
+      Effect.gen(function* (_) {
+        yield* _(Ref.set(isMonitoringRef, false))
+        yield* _(Effect.log("📊 Performance monitoring stopped"))
+      })
+
+    return {
+      recordFrameTime,
+      recordMemoryUsage,
+      recordEntityCount,
+      getPerformanceStats,
+      alertOnPerformanceIssue,
+      startMonitoring,
+      stopMonitoring,
+    }
+  })
+
+export const PerformanceServiceLayer = Layer.effect(PerformanceService, makePerformanceService())
+
+// ===== Performance Operations =====
+export const PerformanceOperations = {
+  recordFrame: (deltaTime: number) =>
+    Effect.gen(function* (_) {
+      const performanceService = yield* _(PerformanceService)
+      yield* _(performanceService.recordFrameTime(deltaTime))
+    }).pipe(Effect.provide(PerformanceServiceLayer)),
+
+  recordEntities: (count: number) =>
+    Effect.gen(function* (_) {
+      const performanceService = yield* _(PerformanceService)
+      yield* _(performanceService.recordEntityCount(count))
+    }).pipe(Effect.provide(PerformanceServiceLayer)),
+
+  getCurrentStats: () =>
+    Effect.gen(function* (_) {
+      const performanceService = yield* _(PerformanceService)
+      return yield* _(performanceService.getPerformanceStats())
+    }).pipe(Effect.provide(PerformanceServiceLayer)),
+
+  startPerformanceMonitoring: () =>
+    Effect.gen(function* (_) {
+      const performanceService = yield* _(PerformanceService)
+      yield* _(performanceService.startMonitoring())
+    }).pipe(Effect.provide(PerformanceServiceLayer)),
+
+  stopPerformanceMonitoring: () =>
+    Effect.gen(function* (_) {
+      const performanceService = yield* _(PerformanceService)
+      yield* _(performanceService.stopMonitoring())
+    }).pipe(Effect.provide(PerformanceServiceLayer)),
+
+  getPerformanceAlerts: () =>
+    Effect.gen(function* (_) {
+      const performanceService = yield* _(PerformanceService)
+      return performanceService.alertOnPerformanceIssue()
+    }).pipe(Effect.provide(PerformanceServiceLayer)),
+}

@@ -1,153 +1,163 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import * as Effect from "effect/Effect"
+import { motion } from 'framer-motion'
 import React, { useEffect, useState } from 'react'
-import { performanceMonitor, type PerformanceMetrics } from '../../lib/game/performance'
+import type { AchievementProgress } from '../../lib/game/achievements'
+import { AchievementOperations } from '../../lib/game/achievements'
+import type { PerformanceMetrics, PerformanceStats } from '../../lib/game/performance'
+import { performanceMonitor, PerformanceOperations } from '../../lib/game/performance'
 
 interface PerformanceMonitorProps {
-  show: boolean
-  onToggle?: () => void
+  className?: string;
+  isVisible?: boolean;
 }
 
 export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({ 
-  show, 
-  onToggle 
+  className = '', 
+  isVisible = false 
 }) => {
-  const [metrics, setMetrics] = useState<PerformanceMetrics>({
-    fps: 60,
-    frameTime: 16.67,
-    memoryUsage: 0,
-    renderTime: 0,
-    updateTime: 0
-  })
+  const [stats, setStats] = useState<PerformanceStats | null>(null)
+  const [achievements, setAchievements] = useState<AchievementProgress | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const [showDetails, setShowDetails] = useState(false)
+  const fetchStats = async () => {
+    try {
+      setIsLoading(true)
+      const performanceStats = await Effect.runPromise(PerformanceOperations.getCurrentStats())
+setStats(performanceStats)
+    } catch (error) {
+      console.error('Failed to fetch performance stats:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchAchievements = async () => {
+    try {
+      const achievementProgress = await Effect.runPromise(AchievementOperations.getCurrentProgress())
+      setAchievements(achievementProgress)
+    } catch (error) {
+      console.error('Failed to fetch achievements:', error)
+    }
+  }
 
   useEffect(() => {
-    if (!show) return
+    if (isVisible) {
+      fetchStats()
+      fetchAchievements()
+      
+      const interval = setInterval(() => {
+        fetchStats()
+        fetchAchievements()
+      }, 1000)
 
-    const interval = setInterval(() => {
-      setMetrics({ ...performanceMonitor.metrics })
-    }, 100)
+      return () => clearInterval(interval)
+    }
+  }, [isVisible])
 
-    return () => clearInterval(interval)
-  }, [show])
-
-  const getPerformanceColor = (fps: number) => {
-    if (fps >= 55) return 'text-green-400'
-    if (fps >= 45) return 'text-yellow-400'
-    return 'text-red-400'
-  }
-
-  const getMemoryColor = (usage: number) => {
-    if (usage < 50) return 'text-green-400'
-    if (usage < 100) return 'text-yellow-400'
-    return 'text-red-400'
-  }
-
-  if (!show) return null
+  if (!isVisible) return null
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -100 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -100 }}
-      className="fixed top-4 left-4 z-50 bg-black/80 backdrop-blur-sm rounded-lg border border-gray-700 p-3 font-mono text-xs"
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9 }}
+      className={`fixed top-4 right-4 bg-black/80 backdrop-blur-sm border border-gray-600 rounded-lg p-4 text-white text-sm font-mono z-50 ${className}`}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-cyan-400 font-bold">PERFORMANCE</span>
-        <div className="flex space-x-1">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-cyan-400 font-bold">Effect-TS Monitor</h3>
+        <div className="flex space-x-2">
           <button
-            onClick={() => setShowDetails(!showDetails)}
-            className="text-gray-400 hover:text-white transition-colors"
-            title="Toggle details"
+            onClick={fetchStats}
+            disabled={isLoading}
+            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs disabled:opacity-50"
           >
-            {showDetails ? '−' : '+'}
+            {isLoading ? '...' : 'Refresh'}
           </button>
-          {onToggle && (
-            <button
-              onClick={onToggle}
-              className="text-gray-400 hover:text-white transition-colors"
-              title="Hide monitor"
-            >
-              ×
-            </button>
-          )}
         </div>
       </div>
 
-      <div className="space-y-1">
-        <div className="flex justify-between">
-          <span className="text-gray-300">FPS:</span>
-          <span className={getPerformanceColor(metrics.fps)}>
-            {Math.round(metrics.fps)}
-          </span>
-        </div>
-
-        <div className="flex justify-between">
-          <span className="text-gray-300">Frame:</span>
-          <span className="text-white">
-            {metrics.frameTime.toFixed(1)}ms
-          </span>
-        </div>
-
-        {metrics.memoryUsage > 0 && (
-          <div className="flex justify-between">
-            <span className="text-gray-300">Memory:</span>
-            <span className={getMemoryColor(metrics.memoryUsage)}>
-              {metrics.memoryUsage.toFixed(1)}MB
-            </span>
+      {/* Performance Stats */}
+      <div className="space-y-2 mb-4">
+        <h4 className="text-yellow-400 font-semibold">Performance</h4>
+        {stats ? (
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span>FPS:</span>
+              <span className={stats.averageFPS < 30 ? 'text-red-400' : 'text-green-400'}>
+                {stats.averageFPS.toFixed(1)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Frame Time:</span>
+              <span>{stats.averageFrameTime.toFixed(1)}ms</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Memory:</span>
+              <span className={stats.currentMemoryUsage > 80 ? 'text-red-400' : 'text-green-400'}>
+                {stats.currentMemoryUsage.toFixed(1)}MB
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Dropped Frames:</span>
+              <span className={stats.droppedFrames > 10 ? 'text-red-400' : 'text-yellow-400'}>
+                {stats.droppedFrames}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Performance Score:</span>
+              <span className={
+                stats.performanceScore > 80 ? 'text-green-400' : 
+                stats.performanceScore > 60 ? 'text-yellow-400' : 'text-red-400'
+              }>
+                {stats.performanceScore}/100
+              </span>
+            </div>
           </div>
+        ) : (
+          <div className="text-gray-400 text-xs">Loading...</div>
         )}
       </div>
 
-      <AnimatePresence>
-        {showDetails && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-3 pt-3 border-t border-gray-600 space-y-1"
-          >
+      {/* Achievement Progress */}
+      <div className="space-y-2">
+        <h4 className="text-purple-400 font-semibold">Achievements</h4>
+        {achievements ? (
+          <div className="space-y-1 text-xs">
             <div className="flex justify-between">
-              <span className="text-gray-400">Update:</span>
-              <span className="text-blue-300">
-                {metrics.updateTime.toFixed(2)}ms
+              <span>Unlocked:</span>
+              <span className="text-green-400">
+                {achievements.unlockedAchievements}/{achievements.totalAchievements}
               </span>
             </div>
-
             <div className="flex justify-between">
-              <span className="text-gray-400">Render:</span>
-              <span className="text-purple-300">
-                {metrics.renderTime.toFixed(2)}ms
+              <span>Progress:</span>
+              <span>
+                {Math.round((achievements.unlockedAchievements / achievements.totalAchievements) * 100)}%
               </span>
             </div>
-
-            <div className="mt-2">
-              <div className="text-gray-400 mb-1">Performance:</div>
-              <div className="w-full bg-gray-700 rounded-full h-2">
-                <motion.div
-                  className={`h-2 rounded-full ${
-                    metrics.fps >= 55 ? 'bg-green-500' :
-                    metrics.fps >= 45 ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}
-                  initial={{ width: '0%' }}
-                  animate={{ width: `${Math.min(100, (metrics.fps / 60) * 100)}%` }}
-                  transition={{ duration: 0.3 }}
-                />
+            {achievements.recentUnlocks.length > 0 && (
+              <div className="mt-2">
+                <div className="text-yellow-400 mb-1">Recent:</div>
+                {achievements.recentUnlocks.slice(-3).map((achievement) => (
+                  <div key={achievement.id} className="text-xs text-gray-300">
+                    {achievement.icon} {achievement.name}
+                  </div>
+                ))}
               </div>
-            </div>
-
-            {performanceMonitor.isPerformanceLow() && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="mt-2 text-red-400 text-center"
-              >
-                ⚠️ Low Performance
-              </motion.div>
             )}
-          </motion.div>
+          </div>
+        ) : (
+          <div className="text-gray-400 text-xs">Loading...</div>
         )}
-      </AnimatePresence>
+      </div>
+
+      {/* Effect-TS Status */}
+      <div className="mt-3 pt-2 border-t border-gray-600">
+        <div className="flex items-center space-x-2 text-xs">
+          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+          <span className="text-green-400">Effect-TS Active</span>
+        </div>
+      </div>
     </motion.div>
   )
 }

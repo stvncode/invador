@@ -2,32 +2,32 @@ import type { AttackPattern, EnemyType, LevelConfig, MovementPattern } from './t
 
 // Simple mathematical level progression
 export const LEVEL_PROGRESSION = {
-  EARLY_POINTS_PER_LEVEL: 1000, // First 5 levels: every 1000 points
-  LATE_POINTS_MULTIPLIER: 1.5, // After level 5: 1.5x more points needed each level
-  HEALTH_MULTIPLIER_PER_LEVEL: 1.2, // 20% more health per level
-  SPEED_MULTIPLIER_PER_LEVEL: 1.1, // 10% faster per level
-  POINTS_MULTIPLIER_PER_LEVEL: 1.15, // 15% more points per level
+  EARLY_POINTS_PER_LEVEL: 500, // First 10 levels: every 500 points (easier progression)
+  LATE_POINTS_MULTIPLIER: 1.3, // After level 10: 1.3x more points needed each level
+  HEALTH_MULTIPLIER_PER_LEVEL: 1.15, // 15% more health per level
+  SPEED_MULTIPLIER_PER_LEVEL: 1.08, // 8% faster per level
+  POINTS_MULTIPLIER_PER_LEVEL: 1.12, // 12% more points per level
 }
 
 // Calculate what level the player should be at based on score
 export const calculateLevelFromScore = (score: number): number => {
-  if (score < LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * 5) {
-    // First 5 levels: simple division
+  if (score < LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * 10) {
+    // First 10 levels: simple division
     return Math.floor(score / LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL) + 1
   } else {
-    // After level 5: exponential scaling
-    const baseScore = LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * 5 // 5000 points for level 5
+    // After level 10: exponential scaling
+    const baseScore = LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * 10 // 5000 points for level 10
     const remainingScore = score - baseScore
     
     // Calculate additional levels with increasing requirements
-    let currentLevel = 5
-    let currentRequirement = LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * LEVEL_PROGRESSION.LATE_POINTS_MULTIPLIER // 1500 for level 6
+    let currentLevel = 10
+    let currentRequirement = LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * LEVEL_PROGRESSION.LATE_POINTS_MULTIPLIER // 1300 for level 11
     let totalUsed = 0
     
     while (totalUsed + currentRequirement <= remainingScore) {
       totalUsed += currentRequirement
       currentLevel++
-      currentRequirement *= LEVEL_PROGRESSION.LATE_POINTS_MULTIPLIER // Each level requires 1.5x more
+      currentRequirement *= LEVEL_PROGRESSION.LATE_POINTS_MULTIPLIER // Each level requires 1.3x more
     }
     
     return currentLevel
@@ -36,14 +36,14 @@ export const calculateLevelFromScore = (score: number): number => {
 
 // Calculate score needed for next level
 export const getScoreForNextLevel = (currentLevel: number): number => {
-  if (currentLevel <= 5) {
+  if (currentLevel <= 10) {
     return currentLevel * LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL
   } else {
     // Calculate cumulative score needed
-    let totalScore = LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * 5 // First 5 levels
+    let totalScore = LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * 10 // First 10 levels
     let requirement = LEVEL_PROGRESSION.EARLY_POINTS_PER_LEVEL * LEVEL_PROGRESSION.LATE_POINTS_MULTIPLIER
     
-    for (let level = 6; level <= currentLevel; level++) {
+    for (let level = 11; level <= currentLevel; level++) {
       totalScore += requirement
       requirement *= LEVEL_PROGRESSION.LATE_POINTS_MULTIPLIER
     }
@@ -135,9 +135,18 @@ export const getAvailableEnemyTypes = (level: number): EnemyType[] => {
   if (level >= 7) types.push('regenerator')
   if (level >= 8) types.push('elite')
   if (level >= 9) types.push('swarm')
-  if (level >= 10 && Math.random() < 0.1) types.push('mini-boss') // 10% chance
-  if (level >= 15 && Math.random() < 0.05) types.push('boss') // 5% chance
-  if (level >= 20 && Math.random() < 0.02) types.push('mega-boss') // 2% chance
+  
+  // Boss battles every 10 levels
+  if (level % 10 === 0) {
+    return ['boss'] // Only spawn boss on boss levels
+  }
+  
+  // Special enemies with increasing frequency
+  if (level >= 5 && Math.random() < 0.3) types.push('kamikaze')
+  if (level >= 6 && Math.random() < 0.25) types.push('shielded')
+  if (level >= 7 && Math.random() < 0.2) types.push('regenerator')
+  if (level >= 8 && Math.random() < 0.15) types.push('elite')
+  if (level >= 9 && Math.random() < 0.1) types.push('swarm')
   
   return types
 }

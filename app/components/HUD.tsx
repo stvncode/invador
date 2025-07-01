@@ -9,11 +9,13 @@ export const HUD: React.FC = () => {
   const level = useGameStore(state => state.level)
   const enemies = useGameStore(state => state.enemies)
   const gameTime = useGameStore(state => state.gameTime)
+  const isBossBattle = useGameStore(state => state.isBossBattle)
   const [displayScore, setDisplayScore] = useState(0)
   
   // Level up notification state
   const [prevLevel, setPrevLevel] = useState(level)
   const [showLevelUp, setShowLevelUp] = useState(false)
+  const [showBossBattle, setShowBossBattle] = useState(false)
 
   const formatTime = (time: number): string => {
     const minutes = Math.floor(time / 60000)
@@ -58,6 +60,16 @@ export const HUD: React.FC = () => {
       setPrevLevel(level)
     }
   }, [level, prevLevel])
+
+  // Boss battle notification effect
+  useEffect(() => {
+    if (isBossBattle) {
+      setShowBossBattle(true)
+      // Keep showing until boss battle ends
+    } else {
+      setShowBossBattle(false)
+    }
+  }, [isBossBattle])
 
   // Also hide notification when level changes again (safety measure)
   useEffect(() => {
@@ -107,7 +119,35 @@ export const HUD: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <div className="flex justify-between items-start" style={{ marginTop: showLevelUp ? '80px' : '0px' }}>
+      {/* Boss Battle Notification */}
+      <AnimatePresence mode="wait">
+        {showBossBattle && (
+          <motion.div
+            key={`boss-battle-${level}`}
+            initial={{ opacity: 0, y: -30, scale: 0.8 }}
+            animate={{ opacity: 1, y: 30, scale: 1 }}
+            exit={{ opacity: 0, y: -30, scale: 0.8 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="absolute top-0 left-1/2 transform -translate-x-1/2 z-20 mb-4"
+          >
+            <div className="bg-gradient-to-r from-red-600/90 to-orange-600/90 backdrop-blur-xl rounded-lg border border-red-400/50 shadow-lg px-6 py-3">
+              <div className="flex items-center space-x-3">
+                <div className="text-2xl">🔥</div>
+                <div>
+                  <div className="text-lg font-bold text-white">
+                    BOSS BATTLE!
+                  </div>
+                  <div className="text-sm text-red-200">
+                    Level {level} - Defeat the boss to continue!
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex justify-between items-start" style={{ marginTop: (showLevelUp || showBossBattle) ? '80px' : '0px' }}>
         {/* Left Panel - Main Stats */}
         <motion.div 
           initial={{ opacity: 0, x: -50 }}
@@ -289,6 +329,52 @@ export const HUD: React.FC = () => {
                      player.shipLevel === 3 ? 'Piercing Laser Beam' :
                      player.shipLevel === 2 ? 'Triple Shot Spread' : 'Single Projectile'}
                   </div>
+                  
+                  {/* Ship Upgrade Timer */}
+                  {player.shipUpgradeTime > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ 
+                        opacity: 1, 
+                        scale: player.shipUpgradeTime <= 3000 ? [1, 1.05, 1] : 1 // Pulse when < 3 seconds
+                      }}
+                      transition={{ 
+                        repeat: player.shipUpgradeTime <= 3000 ? Infinity : 0, 
+                        duration: 0.6 
+                      }}
+                      className={`mt-2 p-2 rounded-lg border transition-all duration-300 ${
+                        player.shipUpgradeTime <= 3000 
+                          ? 'bg-gradient-to-r from-red-500/30 to-red-600/30 border-red-400/70' 
+                          : 'bg-gradient-to-r from-orange-500/20 to-red-500/20 border-orange-400/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={`font-medium ${
+                          player.shipUpgradeTime <= 3000 ? 'text-red-300' : 'text-orange-300'
+                        }`}>
+                          {player.shipUpgradeTime <= 3000 ? '⚠️ Upgrade Expiring' : '⏱️ Upgrade Time'}
+                        </span>
+                        <span className={`font-mono ${
+                          player.shipUpgradeTime <= 3000 ? 'text-red-200' : 'text-orange-200'
+                        }`}>
+                          {Math.ceil(player.shipUpgradeTime / 1000)}s
+                        </span>
+                      </div>
+                      <div className="mt-1 bg-black/50 rounded-full h-1 overflow-hidden">
+                        <motion.div
+                          className={`h-full transition-all duration-300 ${
+                            player.shipUpgradeTime <= 3000 
+                              ? 'bg-gradient-to-r from-red-400 to-red-500' 
+                              : 'bg-gradient-to-r from-orange-400 to-red-400'
+                          }`}
+                          style={{ 
+                            width: `${Math.min(100, (player.shipUpgradeTime / 9000) * 100)}%` 
+                          }}
+                          transition={{ duration: 0.1 }}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import * as Runtime from "effect/Runtime"
+import { match } from "ts-pattern"
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { soundManager } from './audio'
@@ -12,6 +13,7 @@ import {
   getSpawnRate
 } from './levels'
 import { isColliding } from './services'
+import { SettingsOperations } from './settings'
 import type {
   Bullet,
   Enemy,
@@ -36,6 +38,7 @@ interface GameStore {
   gameTime: number;
   level: number;
   lastLevelCheck: number; // Track when we last checked for level advancement
+  isBossBattle: boolean; // Track if we're in a boss battle
   
   // Entities
   player: Player;
@@ -186,6 +189,7 @@ const createInitialPlayer = (): Player => ({
   lives: 3,
   weaponLevel: 1,
   shipLevel: 1, // Start with basic ship
+  shipUpgradeTime: 0, // No upgrade active initially
   invulnerable: false,
   invulnerabilityTime: 0,
 });
@@ -223,6 +227,7 @@ export const useGameStore = create<GameStore>()(
       gameTime: 0,
       level: 1,
       lastLevelCheck: 0,
+      isBossBattle: false,
       
       player: createInitialPlayer(),
       enemies: [],
@@ -250,6 +255,7 @@ export const useGameStore = create<GameStore>()(
           isPaused: false,
           gameTime: 0,
           level: 1,
+          isBossBattle: false,
           player: createInitialPlayer(),
           enemies: [],
           bullets: [],
@@ -262,11 +268,14 @@ export const useGameStore = create<GameStore>()(
 
       pauseGame: () => set({ gameState: 'paused', isPaused: true }),
       resumeGame: () => set({ gameState: 'playing', isPaused: false }),
-      endGame: () => set({ gameState: 'gameOver', isRunning: false }),
+      endGame: () => {
+        set({ gameState: 'gameOver', isRunning: false });
+      },
       resetGame: () => {
         set({
           gameTime: 0,
           level: 1,
+          isBossBattle: false,
           player: createInitialPlayer(),
           enemies: [],
           bullets: [],
@@ -278,12 +287,40 @@ export const useGameStore = create<GameStore>()(
 
       // Level Management
       checkLevelAdvancement: () => {
-        const { level, player } = get();
+        const { level, player, isBossBattle } = get();
         const nextLevel = calculateLevelFromScore(player.score);
+        
+        console.log(`🔍 Level Check: Current=${level}, Score=${player.score}, Calculated=${nextLevel}, BossBattle=${isBossBattle}`);
+        
+        // If we're in a boss battle, don't advance until boss is defeated
+        if (isBossBattle) {
+          const bossEnemies = get().enemies.filter(e => e.type === 'boss');
+          if (bossEnemies.length === 0) {
+            // Boss defeated! Advance to next level
+            console.log(`🏆 Boss defeated! Advancing to level ${level + 1}`);
+            set({ 
+              level: level + 1,
+              isBossBattle: false 
+            });
+            get().updateStats({ highestLevel: Math.max(get().stats.highestLevel, level + 1) });
+          }
+          return;
+        }
         
         if (nextLevel > level) {
           console.log(`🎉 Level up! Advancing from ${level} to ${nextLevel} with ${player.score} points!`);
-          set({ level: nextLevel });
+          
+          // Check if this is a boss level
+          if (nextLevel % 10 === 0) {
+            console.log(`🔥 BOSS BATTLE! Level ${nextLevel} - Prepare for the ultimate challenge! 🔥`);
+            set({ 
+              level: nextLevel,
+              isBossBattle: true 
+            });
+          } else {
+            set({ level: nextLevel });
+          }
+          
           // Update stats
           get().updateStats({ highestLevel: Math.max(get().stats.highestLevel, nextLevel) });
         }
@@ -322,8 +359,7 @@ export const useGameStore = create<GameStore>()(
         const baseDamage = 25 * player.weaponLevel;
         
         // Different firing patterns based on ship level
-        switch (player.shipLevel) {
-          case 1: {
+        match(player.shipLevel).with(1, () => {
             // Basic single shot
             const bullet: Bullet = {
               id: `bullet-${Date.now()}-${Math.random()}`,
@@ -344,10 +380,8 @@ export const useGameStore = create<GameStore>()(
             };
             get().addBullet(bullet);
             get().incrementStat('totalBulletsFired');
-            break;
-          }
-          
-          case 2: {
+          })
+          .with(2, () => {
             // Multi-shot: 3 bullets spread
             const spreadAngle = 0.3; // Angle in radians
             for (let i = 0; i < 3; i++) {
@@ -375,10 +409,8 @@ export const useGameStore = create<GameStore>()(
               get().addBullet(bullet);
             }
             get().incrementStat('totalBulletsFired', 3);
-            break;
-          }
-          
-          case 3: {
+          })
+          .with(3, () => {
             // Laser beam: Long piercing bullet
             const bullet: Bullet = {
               id: `laser-${Date.now()}-${Math.random()}`,
@@ -399,10 +431,8 @@ export const useGameStore = create<GameStore>()(
             };
             get().addBullet(bullet);
             get().incrementStat('totalBulletsFired');
-            break;
-          }
-          
-          case 4: {
+          })
+          .with(4, () => {
             // Dual Piercing Lasers: Two parallel laser beams
             const laserOffset = 8; // Distance between the two lasers
             for (let i = 0; i < 2; i++) {
@@ -426,10 +456,8 @@ export const useGameStore = create<GameStore>()(
               get().addBullet(bullet);
             }
             get().incrementStat('totalBulletsFired', 2);
-            break;
-          }
-          
-          default: {
+          })
+          .otherwise(() => {
             // Fallback to basic shot
             const bullet: Bullet = {
               id: `bullet-${Date.now()}-${Math.random()}`,
@@ -450,8 +478,7 @@ export const useGameStore = create<GameStore>()(
             };
             get().addBullet(bullet);
             get().incrementStat('totalBulletsFired');
-          }
-        }
+          })
         
         set({ lastFrameTime: now });
         
@@ -476,7 +503,9 @@ export const useGameStore = create<GameStore>()(
               lives: player.lives - 1, 
               health: player.maxHealth,
               invulnerable: true,
-              invulnerabilityTime: 3000
+              invulnerabilityTime: 3000,
+              shipLevel: 1, // Revert to basic ship on death
+              shipUpgradeTime: 0 // Clear upgrade timer
             });
           } else {
             get().endGame();
@@ -494,18 +523,141 @@ export const useGameStore = create<GameStore>()(
       })),
       
       updateEnemies: (deltaTime) => {
-        const { enemies, config } = get();
+        const { enemies, config, player } = get();
         const speed = config.enemies.speed * (deltaTime / 1000);
         
         set((state) => ({
           enemies: state.enemies
-            .map(enemy => ({
-              ...enemy,
-              position: {
-                ...enemy.position,
-                y: enemy.position.y + speed
+            .map(enemy => {
+              let newVelocity = { ...enemy.velocity };
+              
+              // Special behaviors for different enemy types
+              switch (enemy.type) {
+                case 'kamikaze': {
+                  // Kamikaze enemies speed up when damaged and move toward player
+                  const damageRatio = 1 - (enemy.health / enemy.maxHealth);
+                  const speedMultiplier = 1 + damageRatio * 2; // Up to 3x speed when heavily damaged
+                  
+                  // Move toward player
+                  const dx = player.position.x - enemy.position.x;
+                  const dy = player.position.y - enemy.position.y;
+                  const distance = Math.sqrt(dx * dx + dy * dy);
+                  
+                  if (distance > 0) {
+                    newVelocity = {
+                      x: (dx / distance) * speed * speedMultiplier,
+                      y: (dy / distance) * speed * speedMultiplier,
+                    };
+                  }
+                  break;
+                }
+                
+                case 'shielded': {
+                  // Shielded enemies have regenerating shields
+                  let newShield = enemy.shield;
+                  if (enemy.shield < enemy.maxShield) {
+                    newShield = Math.min(enemy.maxShield, enemy.shield + 0.5 * (deltaTime / 1000));
+                  }
+                  
+                  // Move in diagonal pattern
+                  const time = Date.now() * 0.001;
+                  newVelocity = {
+                    x: Math.sin(time + enemy.id.charCodeAt(0)) * speed * 0.5,
+                    y: speed,
+                  };
+                  
+                  return {
+                    ...enemy,
+                    velocity: newVelocity,
+                    shield: newShield,
+                    position: {
+                      x: enemy.position.x + newVelocity.x,
+                      y: enemy.position.y + newVelocity.y,
+                    },
+                  };
+                }
+                
+                case 'regenerator': {
+                  // Regenerating enemies heal over time
+                  let newHealth = enemy.health;
+                  if (enemy.health < enemy.maxHealth) {
+                    newHealth = Math.min(enemy.maxHealth, enemy.health + 5 * (deltaTime / 1000));
+                  }
+                  
+                  // Evasive movement
+                  const time = Date.now() * 0.002;
+                  newVelocity = {
+                    x: Math.sin(time + enemy.id.charCodeAt(0)) * speed * 0.8,
+                    y: speed * 0.7,
+                  };
+                  
+                  return {
+                    ...enemy,
+                    velocity: newVelocity,
+                    health: newHealth,
+                    position: {
+                      x: enemy.position.x + newVelocity.x,
+                      y: enemy.position.y + newVelocity.y,
+                    },
+                  };
+                }
+                
+                case 'boss': {
+                  // Boss enemies have complex movement patterns
+                  const time = Date.now() * 0.001;
+                  const phase = Math.floor(time / 5) % 4; // 4 different phases
+                  
+                  switch (phase) {
+                    case 0: // Circle pattern
+                      newVelocity = {
+                        x: Math.cos(time) * speed * 0.5,
+                        y: speed * 0.3,
+                      };
+                      break;
+                    case 1: // Side to side
+                      newVelocity = {
+                        x: Math.sin(time * 2) * speed * 0.8,
+                        y: speed * 0.2,
+                      };
+                      break;
+                    case 2: // Aggressive approach
+                      const dx = player.position.x - enemy.position.x;
+                      const dy = player.position.y - enemy.position.y;
+                      const distance = Math.sqrt(dx * dx + dy * dy);
+                      if (distance > 0) {
+                        newVelocity = {
+                          x: (dx / distance) * speed * 0.4,
+                          y: (dy / distance) * speed * 0.4,
+                        };
+                      }
+                      break;
+                    case 3: // Retreat and shoot
+                      newVelocity = {
+                        x: Math.sin(time) * speed * 0.3,
+                        y: -speed * 0.2, // Move up slightly
+                      };
+                      break;
+                  }
+                  break;
+                }
+                
+                default: {
+                  // Standard movement
+                  newVelocity = { x: 0, y: speed };
+                  break;
+                }
               }
-            }))
+              
+              // Update position
+              return {
+                ...enemy,
+                velocity: newVelocity,
+                position: {
+                  x: enemy.position.x + newVelocity.x,
+                  y: enemy.position.y + newVelocity.y,
+                },
+              };
+            })
             .filter(enemy => enemy.position.y < config.canvas.height + 50)
         }));
       },
@@ -653,13 +805,65 @@ export const useGameStore = create<GameStore>()(
                 get().removeBullet(bullet.id);
               }
               
-              const newHealth = enemy.health - bullet.damage;
+              let damageDealt = bullet.damage;
+              let newHealth = enemy.health;
+              let newShield = enemy.shield;
+              
+              // Handle shielded enemies
+              if (enemy.shield > 0) {
+                if (enemy.shield >= bullet.damage) {
+                  // Shield absorbs all damage
+                  newShield = enemy.shield - bullet.damage;
+                  damageDealt = 0;
+                } else {
+                  // Shield breaks, remaining damage goes to health
+                  damageDealt = bullet.damage - enemy.shield;
+                  newShield = 0;
+                }
+              }
+              
+              // Apply remaining damage to health
+              if (damageDealt > 0) {
+                newHealth = enemy.health - damageDealt;
+              }
+              
               if (newHealth <= 0) {
                 get().removeEnemy(enemy.id);
                 get().updatePlayer({ 
                   score: player.score + enemy.points 
                 });
                 get().incrementStat('totalEnemiesDestroyed');
+                
+                // Play explosion sound (louder for bosses)
+                if (enemy.type === 'boss') {
+                  soundManager.playSound('boss-explosion'); // Boss explosion
+                  console.log(`💥 Boss defeated! Epic explosion!`);
+                } else {
+                  soundManager.playSound('explosion'); // Regular explosion
+                }
+                
+                // Check for level advancement after score update
+                get().checkLevelAdvancement();
+                
+                // Special behavior for splitting enemies
+                if (enemy.type === 'regenerator') {
+                  // Create 2 smaller enemies when destroyed
+                  for (let i = 0; i < 2; i++) {
+                    const baseEnemy = get().createEnemy('swarm', 
+                      enemy.position.x + (i * 20) - 10, 
+                      enemy.position.y + 20
+                    );
+                    // Create new enemy with reduced stats
+                    const splitEnemy = {
+                      ...baseEnemy,
+                      health: Math.floor(enemy.health * 0.3),
+                      maxHealth: Math.floor(enemy.health * 0.3),
+                      points: Math.floor(enemy.points * 0.2),
+                      size: { width: 20, height: 20 },
+                    };
+                    get().addEnemy(splitEnemy);
+                  }
+                }
                 
                 // Create sprite-based explosion at enemy position
                 get().addExplosion({
@@ -722,10 +926,14 @@ export const useGameStore = create<GameStore>()(
                   });
                 }
               } else {
-                // Enemy survives, update its health
+                // Enemy survives, update its health and shield
                 set((state) => ({
                   enemies: state.enemies.map(e => 
-                    e.id === enemy.id ? { ...e, health: newHealth } : e
+                    e.id === enemy.id ? { 
+                      ...e, 
+                      health: newHealth,
+                      shield: newShield
+                    } : e
                   )
                 }));
               }
@@ -754,33 +962,47 @@ export const useGameStore = create<GameStore>()(
           if (isColliding(powerUp, player)) {
             get().collectPowerUp(powerUp.id);
             
-            switch (powerUp.type) {
-              case 'health':
+            match(powerUp.type).with('health', () => {
                 get().updatePlayer({
                   health: Math.min(player.maxHealth, player.health + 25)
                 });
-                break;
-              case 'weapon':
+              })
+              .with('weapon', () => {
                 get().updatePlayer({
                   weaponLevel: Math.min(10, player.weaponLevel + 1)
                 });
-                break;
-              case 'shield':
+              })
+              .with('shield', () => {
                 get().updatePlayer({
                   invulnerable: true,
                   invulnerabilityTime: 5000
                 });
-                break;
-              case 'ship':
-                // Upgrade ship level (max level 4)
-                const newShipLevel = Math.min(4, player.shipLevel + 1);
+              })
+              .with('ship', () => {
+                // Randomly assign ship level 2, 3, or 4 for temporary upgrade
+                const availableLevels = [2, 3, 4];
+                const randomShipLevel = availableLevels[Math.floor(Math.random() * availableLevels.length)];
+                const upgradeDuration = 7000 + Math.random() * 2000; // 7-9 seconds
+                
+                const wasAlreadyUpgraded = player.shipLevel > 1;
+                const previousLevel = player.shipLevel;
+                
                 get().updatePlayer({
-                  shipLevel: newShipLevel
+                  shipLevel: randomShipLevel,
+                  shipUpgradeTime: upgradeDuration
                 });
                 
                 // Show upgrade message based on new ship level
                 const shipNames = ['', 'Basic Fighter', 'Multi-Shot Cruiser', 'Laser Destroyer', 'Dual Laser Annihilator'];
-                console.log(`🚀 Ship upgraded to Level ${newShipLevel}: ${shipNames[newShipLevel]}!`);
+                if (wasAlreadyUpgraded) {
+                  if (randomShipLevel === previousLevel) {
+                    console.log(`🔄 Ship upgrade refreshed: ${shipNames[randomShipLevel]} for ${Math.round(upgradeDuration/1000)}s!`);
+                  } else {
+                    console.log(`🚀 Ship upgraded from Level ${previousLevel} to Level ${randomShipLevel}: ${shipNames[randomShipLevel]} for ${Math.round(upgradeDuration/1000)}s!`);
+                  }
+                } else {
+                  console.log(`🚀 Temporary ship upgrade to Level ${randomShipLevel}: ${shipNames[randomShipLevel]} for ${Math.round(upgradeDuration/1000)}s!`);
+                }
                 
                 // Create extra upgrade particles for ship upgrades
                 for (let i = 0; i < 8; i++) {
@@ -804,8 +1026,8 @@ export const useGameStore = create<GameStore>()(
                     alpha: 1,
                   });
                 }
-                break;
-            }
+              })
+              .otherwise(() => {});
           }
         });
       },
@@ -817,19 +1039,31 @@ export const useGameStore = create<GameStore>()(
         const movementPattern = getMovementPattern(type);
         const attackPattern = getAttackPattern(type);
         
+        // Special size adjustments for different enemy types
+        let size = { width: 35, height: 35 };
+        if (type.includes('boss')) {
+          size = { width: 80, height: 80 };
+        } else if (type === 'heavy') {
+          size = { width: 45, height: 45 };
+        } else if (type === 'kamikaze') {
+          size = { width: 30, height: 30 };
+        } else if (type === 'shielded') {
+          size = { width: 40, height: 40 };
+        } else if (type === 'swarm') {
+          size = { width: 25, height: 25 };
+        }
+        
         return {
           id: `enemy-${Date.now()}-${Math.random()}`,
           position: {
-            x: x ?? Math.random() * (config.canvas.width - (type.includes('boss') ? 80 : 35)),
+            x: x ?? Math.random() * (config.canvas.width - size.width),
             y: y ?? -50,
           },
           velocity: { 
             x: 0, 
             y: stats.speed * config.difficulty.enemySpeedMultiplier * (1 / 60) 
           },
-          size: type.includes('boss') ? { width: 80, height: 80 } : 
-                type === 'heavy' ? { width: 45, height: 45 } : 
-                { width: 35, height: 35 },
+          size,
           health: stats.health,
           maxHealth: stats.health,
           isActive: true,
@@ -850,8 +1084,20 @@ export const useGameStore = create<GameStore>()(
       },
 
       spawnEnemies: (deltaTime) => {
-        const { enemies, level } = get();
+        const { enemies, level, isBossBattle, config } = get();
         const now = Date.now();
+        
+        // If we're in a boss battle, only spawn boss if none exists
+        if (isBossBattle) {
+          const bossEnemies = enemies.filter(e => e.type === 'boss');
+          if (bossEnemies.length === 0) {
+            // Spawn the boss
+            const boss = get().createEnemy('boss', config.canvas.width / 2 - 40, -80);
+            get().addEnemy(boss);
+            console.log(`👹 Boss spawned at level ${level}!`);
+          }
+          return; // Don't spawn other enemies during boss battle
+        }
         
         const maxEnemies = getMaxEnemiesForLevel(level);
         if (enemies.length >= maxEnemies) return;
@@ -872,16 +1118,30 @@ export const useGameStore = create<GameStore>()(
         const state = get();
         if (!state.isRunning || state.isPaused) return;
         
-        // Check for automatic level advancement based on score
-        get().checkLevelAdvancement();
-        
-        // Update invulnerability
-        if (state.player.invulnerable) {
-          const newTime = Math.max(0, state.player.invulnerabilityTime - deltaTime);
-          if (newTime <= 0) {
-            get().updatePlayer({ invulnerable: false, invulnerabilityTime: 0 });
+        // Update player timers
+        const player = state.player;
+        if (player.invulnerabilityTime > 0) {
+          const newInvulnerabilityTime = Math.max(0, player.invulnerabilityTime - deltaTime);
+          if (newInvulnerabilityTime === 0) {
+            get().updatePlayer({ 
+              invulnerable: false, 
+              invulnerabilityTime: 0 
+            });
           } else {
-            get().updatePlayer({ invulnerabilityTime: newTime });
+            get().updatePlayer({ invulnerabilityTime: newInvulnerabilityTime });
+          }
+        }
+        
+        if (player.shipUpgradeTime > 0) {
+          const newShipUpgradeTime = Math.max(0, player.shipUpgradeTime - deltaTime);
+          if (newShipUpgradeTime === 0) {
+            get().updatePlayer({ 
+              shipLevel: 1, 
+              shipUpgradeTime: 0 
+            });
+            console.log('🔄 Ship upgrade expired - back to basic fighter');
+          } else {
+            get().updatePlayer({ shipUpgradeTime: newShipUpgradeTime });
           }
         }
         
@@ -932,13 +1192,31 @@ export const useGameStore = create<GameStore>()(
       })),
       
       saveSettings: async () => {
-        // This will be implemented with Effect-TS storage service
-        console.log('Saving settings with Effect-TS...');
+        try {
+          const settings = get().settings;
+          await Runtime.runPromise(runtime)(
+            SettingsOperations.saveSettings(settings)
+          );
+          console.log('✅ Settings saved successfully with Effect-TS');
+        } catch (error) {
+          console.error('❌ Failed to save settings:', error);
+        }
       },
       
       loadSettings: async () => {
-        // This will be implemented with Effect-TS storage service  
-        console.log('Loading settings with Effect-TS...');
+        try {
+          const loadedSettings = await Runtime.runPromise(runtime)(
+            SettingsOperations.loadSettings()
+          );
+          set((state) => ({ 
+            ...state,
+            settings: loadedSettings 
+          }));
+          console.log('✅ Settings loaded successfully with Effect-TS');
+        } catch (error) {
+          console.error('❌ Failed to load settings:', error);
+          // Keep current settings on error
+        }
       },
       
       // High Scores with Effect-TS

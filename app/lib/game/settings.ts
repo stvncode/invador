@@ -200,6 +200,20 @@ export const SettingsOperations = {
       return yield* _(settingsService.getSettings())
     }).pipe(Effect.provide(SettingsServiceLayer)),
 
+  // Save settings
+  saveSettings: (settings: GameSettings) =>
+    Effect.gen(function* (_) {
+      const settingsService = yield* _(SettingsService)
+      yield* _(settingsService.updateSettings(settings))
+    }).pipe(Effect.provide(SettingsServiceLayer)),
+
+  // Load settings
+  loadSettings: () =>
+    Effect.gen(function* (_) {
+      const settingsService = yield* _(SettingsService)
+      return yield* _(settingsService.getSettings())
+    }).pipe(Effect.provide(SettingsServiceLayer)),
+
   // Update volume settings
   updateVolume: (type: "master" | "music" | "sfx", volume: number) =>
     Effect.gen(function* (_) {

@@ -32,7 +32,8 @@ export const Player = S.extend(Entity, S.Struct({
   score: S.Number,
   lives: S.Number,
   weaponLevel: S.Number,
-  shipLevel: S.Number, // 1, 2, or 3 for different ship tiers
+  shipLevel: S.Number, // 1, 2, 3, or 4 for different ship tiers
+  shipUpgradeTime: S.Number, // Time remaining for temporary ship upgrade
   invulnerable: S.Boolean,
   invulnerabilityTime: S.Number,
 }));
@@ -282,4 +283,30 @@ export type BulletOwner = S.Schema.Type<typeof BulletOwner>;
 export type PowerUpType = S.Schema.Type<typeof PowerUpType>;
 export type WaveType = S.Schema.Type<typeof WaveType>;
 export type EnemyWave = S.Schema.Type<typeof EnemyWave>;
-export type LevelConfig = S.Schema.Type<typeof LevelConfig>; 
+export type LevelConfig = S.Schema.Type<typeof LevelConfig>;
+
+// ===== Analytics Types =====
+export interface GameEvent {
+  readonly id: string
+  readonly timestamp: number
+  readonly type: "enemy_destroyed" | "player_shoot" | "power_up_collected" | "level_up" | "game_over" | "achievement_unlocked"
+  readonly data: Record<string, unknown>
+  readonly sessionId: string
+}
+
+export interface GameMetrics {
+  readonly totalEvents: number
+  readonly eventsByType: Map<string, number>
+  readonly averageFrameTime: number
+  readonly peakMemoryUsage: number
+  readonly sessionDuration: number
+}
+
+export interface SessionSummary {
+  readonly sessionId: string
+  readonly duration: number
+  readonly totalEvents: number
+  readonly eventsByType: Record<string, number>
+  readonly averageFrameTime: number
+  readonly peakMemoryUsage: number
+} 
