@@ -17,6 +17,9 @@ export const GameMenu: React.FC = () => {
   
   const startGame = useGameStore(state => state.startGame)
   const resetGame = useGameStore(state => state.resetGame)
+  const stats = useGameStore(state => state.stats)
+  const getTopScores = useGameStore(state => state.getTopScores)
+  const [showStats, setShowStats] = useState(false)
 
   // Initialize audio but don't start music yet (browser restrictions)
   useEffect(() => {
@@ -48,6 +51,16 @@ export const GameMenu: React.FC = () => {
         // Don't show error to user for music - it's not critical
       }
     }
+  }
+
+  // Get best score and stats
+  const topScores = getTopScores(5)
+  const bestScore = topScores.length > 0 ? topScores[0].score : 0
+
+  const formatTime = (ms: number): string => {
+    const minutes = Math.floor(ms / 60000)
+    const seconds = Math.floor((ms % 60000) / 1000)
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`
   }
 
   const handleStartGame = async () => {
@@ -155,6 +168,26 @@ export const GameMenu: React.FC = () => {
           </div>
         </motion.div>
 
+        {/* Best Score Display */}
+        {bestScore > 0 && (
+          <motion.div
+            className="bg-black/70 rounded-lg p-4 border border-yellow-500/50"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div className="text-yellow-400 text-sm font-semibold mb-1">🏆 BEST SCORE</div>
+            <div className="text-white text-2xl font-bold">
+              {bestScore.toLocaleString()}
+            </div>
+            {stats.highestLevel > 0 && (
+              <div className="text-gray-400 text-xs mt-1">
+                Highest Level: {stats.highestLevel}
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {/* Menu Buttons */}
         <motion.div 
           className="space-y-6"
@@ -189,7 +222,7 @@ export const GameMenu: React.FC = () => {
             transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             <Button
-              onClick={handleSettings}
+              onClick={() => setShowStats(!showStats)}
               variant="outline"
               size="lg"
               className="w-full h-16 bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-indigo-500/20 hover:from-cyan-500/30 hover:via-blue-500/30 hover:to-indigo-500/30 border-2 border-cyan-400/50 text-cyan-300 hover:text-cyan-200 font-bold text-xl py-6 shadow-2xl shadow-cyan-500/20 backdrop-blur-md relative overflow-hidden group"
@@ -199,7 +232,28 @@ export const GameMenu: React.FC = () => {
               
               {/* Button content */}
               <span className="relative z-10 flex items-center justify-center">
-                <span>SETTINGS</span>
+                <span>📊 STATISTICS</span>
+              </span>
+            </Button>
+          </motion.div>
+          
+          <motion.div
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
+          >
+            <Button
+              onClick={handleSettings}
+              variant="outline"
+              size="lg"
+              className="w-full h-16 bg-gradient-to-r from-purple-500/20 via-pink-500/20 to-red-500/20 hover:from-purple-500/30 hover:via-pink-500/30 hover:to-red-500/30 border-2 border-purple-400/50 text-purple-300 hover:text-purple-200 font-bold text-xl py-6 shadow-2xl shadow-purple-500/20 backdrop-blur-md relative overflow-hidden group"
+            >
+              {/* Animated border effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 via-pink-400/20 to-red-400/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              
+              {/* Button content */}
+              <span className="relative z-10 flex items-center justify-center">
+                <span>⚙️ SETTINGS</span>
               </span>
             </Button>
           </motion.div>
@@ -225,6 +279,78 @@ export const GameMenu: React.FC = () => {
           <p className="text-gray-500 text-sm">
             v1.0.0 | Built with React Router v7 & Effect-TS
           </p>
+        </motion.div>
+
+        {/* Statistics Panel */}
+        {showStats && (
+          <motion.div
+            className="bg-black/80 rounded-lg p-6 border border-cyan-500/50"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            transition={{ duration: 0.3 }}
+          >
+            <h3 className="text-xl font-bold text-cyan-400 mb-4">📈 Your Stats</h3>
+            
+            {/* High Scores */}
+            {topScores.length > 0 && (
+              <div className="mb-4">
+                <h4 className="text-lg font-semibold text-yellow-400 mb-2">🏆 High Scores</h4>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {topScores.map((score, index) => (
+                    <div key={score.id} className="flex justify-between text-sm">
+                      <span className="text-gray-300">
+                        #{index + 1} {score.playerName}
+                      </span>
+                      <span className="text-yellow-400">
+                        {score.score.toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Overall Stats */}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="bg-black/50 rounded p-3 border border-red-500/30">
+                <div className="text-red-400 font-semibold">Enemies Destroyed</div>
+                <div className="text-white text-lg font-bold">{stats.totalEnemiesDestroyed}</div>
+              </div>
+              <div className="bg-black/50 rounded p-3 border border-blue-500/30">
+                <div className="text-blue-400 font-semibold">Shots Fired</div>
+                <div className="text-white text-lg font-bold">{stats.totalBulletsFired}</div>
+              </div>
+              <div className="bg-black/50 rounded p-3 border border-green-500/30">
+                <div className="text-green-400 font-semibold">Power-ups</div>
+                <div className="text-white text-lg font-bold">{stats.totalPowerUpsCollected}</div>
+              </div>
+              <div className="bg-black/50 rounded p-3 border border-purple-500/30">
+                <div className="text-purple-400 font-semibold">Playtime</div>
+                <div className="text-white text-lg font-bold">{formatTime(stats.totalPlayTime)}</div>
+              </div>
+            </div>
+
+            {stats.totalBulletsFired > 0 && (
+              <div className="mt-4 bg-black/50 rounded p-3 border border-yellow-500/30">
+                <div className="text-yellow-400 font-semibold">Best Accuracy</div>
+                <div className="text-white text-lg font-bold">
+                  {Math.round((stats.totalEnemiesDestroyed / stats.totalBulletsFired) * 100)}%
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Instructions */}
+        <motion.div 
+          className="text-gray-400 text-sm space-y-1"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+        >
+          <p>🎮 Use ARROW KEYS to move, SPACE to shoot</p>
+          <p>🚀 Collect power-ups to upgrade your ship</p>
+          <p>⚡ Press B to activate special abilities</p>
         </motion.div>
       </div>
 

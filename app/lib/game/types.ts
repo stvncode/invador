@@ -29,6 +29,9 @@ export const Entity = S.Struct({
 
 // Player entity
 export const Player = S.extend(Entity, S.Struct({
+  health: S.Number,
+  maxHealth: S.Number,
+  isActive: S.Boolean,
   score: S.Number,
   lives: S.Number,
   weaponLevel: S.Number,
@@ -42,6 +45,11 @@ export const Player = S.extend(Entity, S.Struct({
   autoShootActive: S.Boolean,
   autoShootTime: S.Number, // Time remaining for auto shoot effect
   lastAutoShoot: S.Number, // Last time auto shoot fired
+  // Ability system
+  abilityBar: S.Number, // 0-100
+  maxAbilityBar: S.Number,
+  abilityCooldown: S.Number,
+  lastAbilityUse: S.Number,
 }));
 
 // Enhanced enemy types and patterns
@@ -125,7 +133,7 @@ export const Bullet = S.extend(Entity, S.Struct({
 export const PowerUpType = S.Literal(
   "health", "weapon", "shield", "ship", "multishot", "speed", "rapid-fire", 
   "piercing", "homing", "extra-life", "score-boost", "invincibility",
-  "time-slow", "auto-shoot", "blast"
+  "time-slow", "auto-shoot", "blast", "shield-reflect"
 );
 
 export const PowerUp = S.extend(Entity, S.Struct({

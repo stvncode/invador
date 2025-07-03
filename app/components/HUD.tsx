@@ -11,11 +11,17 @@ export const HUD: React.FC = () => {
   const gameTime = useGameStore(state => state.gameTime)
   const isBossBattle = useGameStore(state => state.isBossBattle)
   const [displayScore, setDisplayScore] = useState(0)
+  const stats = useGameStore(state => state.stats)
+  const getTopScores = useGameStore(state => state.getTopScores)
   
   // Level up notification state
   const [prevLevel, setPrevLevel] = useState(level)
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [showBossBattle, setShowBossBattle] = useState(false)
+
+  // Get best score
+  const topScores = getTopScores(1)
+  const bestScore = topScores.length > 0 ? topScores[0].score : 0
 
   const formatTime = (time: number): string => {
     const minutes = Math.floor(time / 60000)
@@ -198,21 +204,63 @@ export const HUD: React.FC = () => {
                 <div className="space-y-1">
                   <div className="text-xs text-purple-300 font-medium">{levelInfo.name}</div>
                   
-                  {/* Progress bar to next level */}
+                  {/* Level Progress Bar */}
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-400">Next Level</span>
-                      <span className="text-gray-400">{pointsToNextLevel.toLocaleString()} pts</span>
+                      <span className="text-gray-400">Progress</span>
+                      <span className="text-cyan-400 font-mono">{progressToNextLevel.toFixed(1)}%</span>
                     </div>
-                    <div className="relative bg-black/50 rounded-full h-2 overflow-hidden">
-                      <motion.div 
+                    <div className="w-full bg-gray-800 rounded-full h-2 border border-gray-600">
+                      <motion.div
+                        className="bg-gradient-to-r from-cyan-400 to-purple-400 h-full rounded-full"
                         initial={{ width: 0 }}
                         animate={{ width: `${progressToNextLevel}%` }}
                         transition={{ duration: 0.5, ease: "easeOut" }}
-                        className="h-full bg-gradient-to-r from-purple-600 via-purple-500 to-cyan-400"
                       />
                     </div>
+                    <div className="text-xs text-gray-400">
+                      {pointsToNextLevel > 0 ? `${pointsToNextLevel.toLocaleString()} pts to next level` : 'Max level reached!'}
+                    </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Ability Bar Section */}
+              <div className="space-y-2 p-3 bg-blue-900/20 rounded-lg border border-blue-400/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-blue-400 text-sm font-medium">⚡</span>
+                    <span className="text-gray-300 text-sm uppercase tracking-wide">Ability</span>
+                  </div>
+                  <span className="text-blue-400 text-sm font-mono">{player.abilityBar}/{player.maxAbilityBar}</span>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="text-xs text-blue-300 font-medium">Press B for Immunity</div>
+                  
+                  {/* Ability Progress Bar */}
+                  <div className="w-full bg-gray-800 rounded-full h-3 border border-gray-600 overflow-hidden">
+                    <motion.div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        player.abilityBar >= player.maxAbilityBar 
+                          ? 'bg-gradient-to-r from-yellow-400 via-orange-400 to-red-400 animate-pulse' 
+                          : 'bg-gradient-to-r from-blue-400 to-cyan-400'
+                      }`}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(player.abilityBar / player.maxAbilityBar) * 100}%` }}
+                      transition={{ duration: 0.3, ease: "easeOut" }}
+                    />
+                  </div>
+                  
+                  {player.abilityBar >= player.maxAbilityBar && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="text-xs text-yellow-400 font-bold text-center"
+                    >
+                      READY! Press B
+                    </motion.div>
+                  )}
                 </div>
               </div>
 
@@ -615,6 +663,15 @@ export const HUD: React.FC = () => {
         >
           <SoundToggle className="backdrop-blur-xl bg-black/20 border border-cyan-400/30" />
         </motion.div>
+      </div>
+
+      {/* Bottom Stats Bar */}
+      <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-xs text-gray-300 px-4 py-1 flex justify-between">
+        <span>Enemies Destroyed: {stats.totalEnemiesDestroyed}</span>
+        <span>Shots Fired: {stats.totalBulletsFired}</span>
+        <span>Power-ups: {stats.totalPowerUpsCollected}</span>
+        <span>Playtime: {formatTime(stats.totalPlayTime)}</span>
+        <span>Accuracy: {stats.totalBulletsFired > 0 ? Math.round((stats.totalEnemiesDestroyed / stats.totalBulletsFired) * 100) : 0}%</span>
       </div>
     </div>
   )

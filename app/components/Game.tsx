@@ -37,6 +37,42 @@ export const Game: React.FC = () => {
   const [soundDebug, setSoundDebug] = useState(false)
   const [debugPanelVisible, setDebugPanelVisible] = useState(false)
 
+  // Screen shake effect
+  const [screenShake, setScreenShake] = useState({ x: 0, y: 0, intensity: 0 });
+  const lastPlayerHealth = useRef(player.health);
+
+  // Check for damage and trigger screen shake
+  useEffect(() => {
+    if (player.health < lastPlayerHealth.current) {
+      const damage = lastPlayerHealth.current - player.health;
+      const shakeIntensity = Math.min(10, damage * 2); // More damage = more shake
+      
+      setScreenShake({ x: 0, y: 0, intensity: shakeIntensity });
+      
+      // Reset shake after animation
+      const timer = setTimeout(() => {
+        setScreenShake({ x: 0, y: 0, intensity: 0 });
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+    lastPlayerHealth.current = player.health;
+  }, [player.health]);
+
+  // Animate screen shake
+  useEffect(() => {
+    if (screenShake.intensity > 0) {
+      const interval = setInterval(() => {
+        setScreenShake(prev => ({
+          x: (Math.random() - 0.5) * prev.intensity,
+          y: (Math.random() - 0.5) * prev.intensity,
+          intensity: Math.max(0, prev.intensity - 0.5)
+        }));
+      }, 16); // ~60fps
+      
+      return () => clearInterval(interval);
+    }
+  }, [screenShake.intensity]);
 
   // Initialize sound system and sprites
   useEffect(() => {
@@ -275,6 +311,43 @@ const GameCanvas: React.FC = () => {
   const powerUps = useGameStore(state => state.powerUps);
   const particles = useGameStore(state => state.particles);
   const explosions = useGameStore(state => state.explosions);
+  
+  // Screen shake effect
+  const [screenShake, setScreenShake] = useState({ x: 0, y: 0, intensity: 0 });
+  const lastPlayerHealth = useRef(player.health);
+
+  // Check for damage and trigger screen shake
+  useEffect(() => {
+    if (player.health < lastPlayerHealth.current) {
+      const damage = lastPlayerHealth.current - player.health;
+      const shakeIntensity = Math.min(10, damage * 2); // More damage = more shake
+      
+      setScreenShake({ x: 0, y: 0, intensity: shakeIntensity });
+      
+      // Reset shake after animation
+      const timer = setTimeout(() => {
+        setScreenShake({ x: 0, y: 0, intensity: 0 });
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+    lastPlayerHealth.current = player.health;
+  }, [player.health]);
+
+  // Animate screen shake
+  useEffect(() => {
+    if (screenShake.intensity > 0) {
+      const interval = setInterval(() => {
+        setScreenShake(prev => ({
+          x: (Math.random() - 0.5) * prev.intensity,
+          y: (Math.random() - 0.5) * prev.intensity,
+          intensity: Math.max(0, prev.intensity - 0.5)
+        }));
+      }, 16); // ~60fps
+      
+      return () => clearInterval(interval);
+    }
+  }, [screenShake.intensity]);
 
   // Canvas rendering with retro space background
   useEffect(() => {
@@ -288,13 +361,41 @@ const GameCanvas: React.FC = () => {
     const width = config.canvas.width;
     const height = config.canvas.height;
 
-    // Clear canvas with classic space gradient
-    const spaceGradient = ctx.createLinearGradient(0, 0, 0, height);
-    spaceGradient.addColorStop(0, '#000008');
-    spaceGradient.addColorStop(0.5, '#000011');
-    spaceGradient.addColorStop(1, '#000003');
-    ctx.fillStyle = spaceGradient;
-    ctx.fillRect(0, 0, width, height);
+    // Apply screen shake
+    ctx.save();
+    ctx.translate(screenShake.x, screenShake.y);
+
+    // Clear canvas with game-bg image
+    const backgroundImage = new Image();
+    backgroundImage.crossOrigin = 'anonymous';
+    
+    try {
+      backgroundImage.src = '/game-bg.png';
+      if (backgroundImage.complete) {
+        ctx.drawImage(backgroundImage, 0, 0, width, height);
+      } else {
+        backgroundImage.onload = () => {
+          ctx.drawImage(backgroundImage, 0, 0, width, height);
+        };
+        backgroundImage.onerror = () => {
+          // Fallback to gradient if image fails to load
+          const spaceGradient = ctx.createLinearGradient(0, 0, 0, height);
+          spaceGradient.addColorStop(0, '#000008');
+          spaceGradient.addColorStop(0.5, '#000011');
+          spaceGradient.addColorStop(1, '#000003');
+          ctx.fillStyle = spaceGradient;
+          ctx.fillRect(0, 0, width, height);
+        };
+      }
+    } catch (error) {
+      // Fallback to gradient if image fails to load
+      const spaceGradient = ctx.createLinearGradient(0, 0, 0, height);
+      spaceGradient.addColorStop(0, '#000008');
+      spaceGradient.addColorStop(0.5, '#000011');
+      spaceGradient.addColorStop(1, '#000003');
+      ctx.fillStyle = spaceGradient;
+      ctx.fillRect(0, 0, width, height);
+    }
 
     // Classic retro star field
     const drawRetroStars = () => {
@@ -457,120 +558,95 @@ const GameCanvas: React.FC = () => {
        }
     }
 
-    // Enhanced enemy rendering with retro styling
+    // Enhanced enemy rendering with different types and effects
     enemies.forEach((enemy) => {
-      let spriteName = '';
-      let fallbackColor = '#ff4444';
-      let glowColor = '#ff4444';
-      
-      match(enemy.type).with('boss', () => {
-          spriteName = 'boss';
-          fallbackColor = '#ff0000';
-          glowColor = '#ff0000';
-        })
-        .with('heavy', () => {
-          spriteName = 'heavy-enemy';
-          fallbackColor = '#ff6600';
-          glowColor = '#ff6600';
-        })
-        .with('fast', () => {
-          spriteName = 'fast-enemy';
-          fallbackColor = '#ffff00';
-          glowColor = '#ffff00';
-        })
-        .with('shooter', () => {
-          spriteName = 'shooter-enemy';
-          fallbackColor = '#ff00ff';
-          glowColor = '#ff00ff';
-        })
-        .with('kamikaze', () => {
-          spriteName = 'kamikaze-enemy';
-          fallbackColor = '#ff4400';
-          glowColor = '#ff4400';
-        })
-        .with('shielded', () => {
-          spriteName = 'shielded-enemy';
-          fallbackColor = '#0088ff';
-          glowColor = '#0088ff';
-        })
-        .with('regenerator', () => {
-          spriteName = 'spliting-enemy';
-          fallbackColor = '#8800ff';
-          glowColor = '#8800ff';
-        })
-        .with('swarm', () => {
-          spriteName = 'basic-enemy';
-          fallbackColor = '#ff4444';
-          glowColor = '#ff4444';
-        })
-        .with('elite', () => {
-          spriteName = 'heavy-enemy';
-          fallbackColor = '#ff8800';
-          glowColor = '#ff8800';
-        })
-        .otherwise(() => {
-          spriteName = 'basic-enemy';
-          fallbackColor = '#ff4444';
-          glowColor = '#ff4444';
-        });
+      if (!enemy.isActive) return;
 
-      if (!spriteManager.drawSprite(ctx, spriteName, enemy.position.x, enemy.position.y, enemy.size.width, enemy.size.height)) {
-        // Retro enemy with subtle pulse
-        const pulseIntensity = Math.sin(time * 2 + enemy.position.x * 0.01) * 0.2 + 0.8;
-        
-        ctx.shadowColor = glowColor;
-        ctx.shadowBlur = 4;
-        ctx.fillStyle = fallbackColor;
-        ctx.globalAlpha = pulseIntensity;
-        
-        ctx.fillRect(enemy.position.x, enemy.position.y, enemy.size.width, enemy.size.height);
-        
-        ctx.shadowBlur = 0;
+      // Check if enemy is about to shoot (within 500ms of cooldown)
+      const now = Date.now();
+      const timeUntilShoot = enemy.shootCooldown - (now - enemy.lastShot);
+      const isAboutToShoot = timeUntilShoot > 0 && timeUntilShoot < 500;
+      
+      // Draw subtle warning indicator if enemy is about to shoot
+      if (isAboutToShoot) {
+        const warningIntensity = Math.sin(time * 15) * 0.2 + 0.3;
+        ctx.strokeStyle = '#ff6666';
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = warningIntensity;
+        ctx.strokeRect(
+          enemy.position.x - 2, 
+          enemy.position.y - 2, 
+          enemy.size.width + 4, 
+          enemy.size.height + 4
+        );
         ctx.globalAlpha = 1;
       }
 
-      // Retro health bar for damaged enemies
-      if (enemy.health < enemy.maxHealth) {
-        const healthPercent = enemy.health / enemy.maxHealth;
-        const barWidth = enemy.size.width;
-        const barHeight = 2;
-        const barY = enemy.position.y - 6;
-        
-        // Simple retro health bar
-        ctx.fillStyle = '#660000';
-        ctx.fillRect(enemy.position.x, barY, barWidth, barHeight);
-        
-        ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : healthPercent > 0.2 ? '#ffff00' : '#ff0000';
-        ctx.fillRect(enemy.position.x, barY, barWidth * healthPercent, barHeight);
+      // Draw enemy sprite
+      let spriteName = '';
+      
+      switch (enemy.type) {
+        case 'boss':
+          spriteName = 'boss';
+          break;
+        case 'heavy':
+          spriteName = 'heavy-enemy';
+          break;
+        case 'fast':
+          spriteName = 'fast-enemy';
+          break;
+        case 'shooter':
+          spriteName = 'shooter-enemy';
+          break;
+        case 'kamikaze':
+          spriteName = 'kamikaze-enemy';
+          break;
+        case 'shielded':
+          spriteName = 'shielded-enemy';
+          break;
+        case 'regenerator':
+          spriteName = 'spliting-enemy';
+          break;
+        case 'swarm':
+        case 'basic':
+        default:
+          spriteName = 'basic-enemy';
+          break;
       }
       
-      // Shield visualization for shielded enemies
-      if (enemy.shield > 0 && enemy.maxShield > 0) {
-        const shieldPercent = enemy.shield / enemy.maxShield;
-        const shieldRadius = Math.max(enemy.size.width, enemy.size.height) * 0.7;
-        const shieldX = enemy.position.x + enemy.size.width / 2;
-        const shieldY = enemy.position.y + enemy.size.height / 2;
+      if (!spriteManager.drawSprite(ctx, spriteName, enemy.position.x, enemy.position.y, enemy.size.width, enemy.size.height)) {
+        // Fallback rendering for enemies
+        ctx.fillStyle = '#ff4444';
+        ctx.fillRect(enemy.position.x, enemy.position.y, enemy.size.width, enemy.size.height);
+      }
+
+      // Draw health bar for enemies with health
+      if (enemy.health < enemy.maxHealth) {
+        const healthBarWidth = enemy.size.width;
+        const healthBarHeight = 4;
+        const healthPercentage = enemy.health / enemy.maxHealth;
         
-        // Shield glow effect
-        ctx.shadowColor = '#0088ff';
-        ctx.shadowBlur = 8;
-        ctx.strokeStyle = '#0088ff';
+        // Background
+        ctx.fillStyle = '#333333';
+        ctx.fillRect(enemy.position.x, enemy.position.y - 8, healthBarWidth, healthBarHeight);
+        
+        // Health
+        ctx.fillStyle = healthPercentage > 0.5 ? '#00ff00' : healthPercentage > 0.25 ? '#ffff00' : '#ff0000';
+        ctx.fillRect(enemy.position.x, enemy.position.y - 8, healthBarWidth * healthPercentage, healthBarHeight);
+      }
+
+      // Draw shield for shielded enemies
+      if (enemy.shield > 0) {
+        const shieldPercentage = enemy.shield / enemy.maxShield;
+        ctx.strokeStyle = '#00ffff';
         ctx.lineWidth = 2;
-        ctx.globalAlpha = shieldPercent * 0.8;
-        
-        ctx.beginPath();
-        ctx.arc(shieldX, shieldY, shieldRadius, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        // Shield pulse effect
-        const pulseIntensity = Math.sin(time * 4) * 0.2 + 0.8;
-        ctx.globalAlpha = shieldPercent * pulseIntensity * 0.4;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(shieldX, shieldY, shieldRadius + 2, 0, Math.PI * 2);
-        ctx.stroke();
-        
-        ctx.shadowBlur = 0;
+        ctx.globalAlpha = shieldPercentage * 0.8;
+        ctx.strokeRect(
+          enemy.position.x - 2, 
+          enemy.position.y - 2, 
+          enemy.size.width + 4, 
+          enemy.size.height + 4
+        );
         ctx.globalAlpha = 1;
       }
     });
@@ -656,12 +732,35 @@ const GameCanvas: React.FC = () => {
             ctx.shadowBlur = 0;
         }
       } else {
-        // Enemy bullets - keep original red style
-        ctx.shadowColor = '#ff3333';
-        ctx.shadowBlur = 3;
-        ctx.fillStyle = '#ff3333';
+        // Enemy bullets - different colors based on enemy type
+        let bulletColor = '#ff3333';
+        let glowColor = '#ff3333';
+        
+        // Try to determine enemy type from bullet ID
+        if (bullet.id.includes('boss-bullet')) {
+          bulletColor = '#ff0066'; // Darker red for boss bullets
+          glowColor = '#ff0066';
+        } else if (bullet.id.includes('enemy-bullet')) {
+          bulletColor = '#ff3333'; // Standard red for regular enemies
+          glowColor = '#ff3333';
+        }
+        
+        // Add pulsing effect for enemy bullets
+        const pulseIntensity = Math.sin(time * 8) * 0.2 + 0.8;
+        
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = bulletColor;
+        ctx.globalAlpha = pulseIntensity;
         ctx.fillRect(bullet.position.x, bullet.position.y, bullet.size.width, bullet.size.height);
+        
+        // Add a darker core for enemy bullets
+        ctx.fillStyle = '#cc0000';
+        ctx.globalAlpha = pulseIntensity * 0.7;
+        ctx.fillRect(bullet.position.x + 1, bullet.position.y + 1, bullet.size.width - 2, bullet.size.height - 2);
+        
         ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
       }
     });
 
@@ -706,6 +805,11 @@ const GameCanvas: React.FC = () => {
           spriteName = 'blast-powerup';
           fallbackColor = '#ff0066';
           glowColor = '#ff0066';
+          break;
+        case 'shield-reflect':
+          spriteName = 'shield-reflect-powerup';
+          fallbackColor = '#00ffff';
+          glowColor = '#00ffff';
           break;
         default:
           fallbackColor = '#ffffff';
@@ -753,6 +857,20 @@ const GameCanvas: React.FC = () => {
       ctx.fillRect(0, 0, width, height);
     }
 
+    // Ability activation effect - golden glow
+    if (player.invulnerable && player.invulnerabilityTime > 4000) {
+      const abilityIntensity = Math.sin(time * 8) * 0.1 + 0.1;
+      ctx.fillStyle = `rgba(255, 215, 0, ${abilityIntensity})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    // Shield reflect effect - cyan glow
+    if (player.invulnerable && player.invulnerabilityTime > 6000) {
+      const reflectIntensity = Math.sin(time * 12) * 0.15 + 0.15;
+      ctx.fillStyle = `rgba(0, 255, 255, ${reflectIntensity})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+
     // Fixed explosions with proper radius checking
     explosions.forEach((explosion) => {
       const frameSprite = `explosion${explosion.currentFrame + 1}`;
@@ -797,7 +915,9 @@ const GameCanvas: React.FC = () => {
       ctx.font = '12px monospace';
       ctx.fillText(`Entities: ${enemies.length + bullets.length + particles.length + explosions.length}`, 10, height - 10);
     }
-  }, [config, player, enemies, bullets, powerUps, particles, explosions]);
+
+    ctx.restore();
+  }, [config, player, enemies, bullets, powerUps, particles, explosions, screenShake]);
 
   return (
     <div className="flex items-center justify-center w-full h-full relative overflow-hidden">

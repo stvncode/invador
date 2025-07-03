@@ -127,7 +127,7 @@ export const GameOverScreen: React.FC = () => {
             <div className="bg-black/50 rounded-lg p-4 border border-green-500/30">
               <div className="text-green-400 text-sm font-semibold">Accuracy</div>
               <div className="text-white text-xl font-bold">
-                {Math.round((stats.totalEnemiesDestroyed / Math.max(stats.totalBulletsFired, 1)) * 100)}%
+                {stats.totalBulletsFired > 0 ? Math.round((stats.totalEnemiesDestroyed / stats.totalBulletsFired) * 100) : 0}%
               </div>
             </div>
             <div className="bg-black/50 rounded-lg p-4 border border-purple-500/30">
@@ -140,6 +140,36 @@ export const GameOverScreen: React.FC = () => {
             </div>
           </motion.div>
         )}
+
+        {/* Session Summary */}
+        <motion.div 
+          className="bg-black/50 rounded-lg p-4 border border-orange-500/30"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1 }}
+        >
+          <div className="text-orange-400 text-lg font-semibold mb-2">📊 Session Summary</div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <span className="text-gray-400">Session Duration:</span>
+              <div className="text-white font-bold">
+                {Math.floor(stats.totalPlayTime / 60000)}:{String(Math.floor((stats.totalPlayTime % 60000) / 1000)).padStart(2, '0')}
+              </div>
+            </div>
+            <div>
+              <span className="text-gray-400">Highest Level:</span>
+              <div className="text-white font-bold">{stats.highestLevel}</div>
+            </div>
+            <div>
+              <span className="text-gray-400">Bosses Defeated:</span>
+              <div className="text-white font-bold">{stats.bossesDefeated}</div>
+            </div>
+            <div>
+              <span className="text-gray-400">Perfect Levels:</span>
+              <div className="text-white font-bold">{stats.perfectLevels}</div>
+            </div>
+          </div>
+        </motion.div>
 
         {/* High Scores Table */}
         {isSubmitted && topScores.length > 0 && (

@@ -4,30 +4,30 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { soundManager } from './audio'
 import {
-  calculateLevelFromScore,
-  getAttackPattern,
-  getAvailableEnemyTypes,
-  getEnemyStats,
-  getMaxEnemiesForLevel,
-  getMovementPattern,
-  getSpawnRate
+    calculateLevelFromScore,
+    getAttackPattern,
+    getAvailableEnemyTypes,
+    getEnemyStats,
+    getMaxEnemiesForLevel,
+    getMovementPattern,
+    getSpawnRate
 } from './levels'
 import { isColliding } from './services'
 import { SettingsOperations } from './settings'
 import type {
-  Bullet,
-  Enemy,
-  EnemyType,
-  Explosion,
-  GameConfig,
-  GameSettings,
-  GameState,
-  GameStats,
-  HighScore,
-  InputState,
-  Particle,
-  Player,
-  PowerUp
+    Bullet,
+    Enemy,
+    EnemyType,
+    Explosion,
+    GameConfig,
+    GameSettings,
+    GameState,
+    GameStats,
+    HighScore,
+    InputState,
+    Particle,
+    Player,
+    PowerUp
 } from './types'
 
 interface GameStore {
@@ -79,6 +79,7 @@ interface GameStore {
   movePlayer: (direction: 'left' | 'right', deltaTime: number) => void;
   playerShoot: () => void;
   playerTakeDamage: (damage: number) => void;
+  activateAbility: () => void;
   
   // Entity Management
   addEnemy: (enemy: Enemy) => void;
@@ -123,6 +124,8 @@ interface GameStore {
   // Statistics
   updateStats: (updates: Partial<GameStats>) => void;
   incrementStat: (stat: keyof GameStats, amount?: number) => void;
+  updatePlayTime: () => void;
+  calculateFinalAccuracy: () => void;
 }
 
 const DEFAULT_CONFIG: GameConfig = {
@@ -198,6 +201,11 @@ const createInitialPlayer = (): Player => ({
   autoShootActive: false,
   autoShootTime: 0,
   lastAutoShoot: 0,
+  // Ability system
+  abilityBar: 0,
+  maxAbilityBar: 100,
+  abilityCooldown: 0,
+  lastAbilityUse: 0,
 });
 
 const initialInputState: InputState = {
@@ -219,6 +227,10 @@ const initialStats: GameStats = {
   bossesDefeated: 0,
   perfectLevels: 0,
 };
+
+// Game session tracking
+let gameSessionStart: number = 0;
+let lastStatsUpdate: number = 0;
 
 // Create Effect runtime for async operations
 const runtime = Runtime.defaultRuntime;
@@ -255,6 +267,9 @@ export const useGameStore = create<GameStore>()(
 
       // Game Control Actions
       startGame: () => {
+        gameSessionStart = Date.now();
+        lastStatsUpdate = gameSessionStart;
+        
         set({
           gameState: 'playing',
           isRunning: true,
@@ -270,15 +285,32 @@ export const useGameStore = create<GameStore>()(
           explosions: [],
         });
         get().checkLevelAdvancement();
+        console.log('🎮 Game session started - tracking enabled');
       },
 
-      pauseGame: () => set({ gameState: 'paused', isPaused: true }),
-      resumeGame: () => set({ gameState: 'playing', isPaused: false }),
-      endGame: () => {
-        set({ gameState: 'gameOver', isRunning: false });
+      pauseGame: () => {
+        // Update playtime when pausing
+        get().updatePlayTime();
+        set({ gameState: 'paused', isPaused: true });
       },
+      
+      resumeGame: () => {
+        // Reset tracking when resuming
+        lastStatsUpdate = Date.now();
+        set({ gameState: 'playing', isPaused: false });
+      },
+      
+      endGame: () => {
+        // Final playtime update when game ends
+        get().updatePlayTime();
+        get().calculateFinalAccuracy();
+        set({ gameState: 'gameOver', isRunning: false });
+        console.log('🏁 Game session ended - final stats calculated');
+      },
+      
       resetGame: () => {
         set({
+          gameState: 'menu',
           gameTime: 0,
           level: 1,
           isBossBattle: false,
@@ -289,6 +321,34 @@ export const useGameStore = create<GameStore>()(
           particles: [],
           explosions: [],
         });
+      },
+
+      // Add new helper methods for stats tracking
+      updatePlayTime: () => {
+        if (gameSessionStart > 0) {
+          const currentTime = Date.now();
+          const additionalTime = currentTime - lastStatsUpdate;
+          set((state) => ({
+            stats: {
+              ...state.stats,
+              totalPlayTime: state.stats.totalPlayTime + additionalTime
+            }
+          }));
+          lastStatsUpdate = currentTime;
+        }
+      },
+
+      calculateFinalAccuracy: () => {
+        const state = get();
+        const accuracy = state.stats.totalBulletsFired > 0 
+          ? Math.round((state.stats.totalEnemiesDestroyed / state.stats.totalBulletsFired) * 100)
+          : 0;
+        set((prevState) => ({
+          stats: {
+            ...prevState.stats,
+            accuracy: Math.max(prevState.stats.accuracy, accuracy)
+          }
+        }));
       },
 
       // Level Management
@@ -519,6 +579,50 @@ export const useGameStore = create<GameStore>()(
         }
       },
       
+      activateAbility: () => {
+        const player = get().player;
+        const now = Date.now();
+        
+        // Check if ability bar is full and not on cooldown
+        if (player.abilityBar >= player.maxAbilityBar && now - player.lastAbilityUse > player.abilityCooldown) {
+          // Activate 5-second immunity
+          get().updatePlayer({
+            invulnerable: true,
+            invulnerabilityTime: 5000,
+            abilityBar: 0, // Reset ability bar
+            lastAbilityUse: now
+          });
+          
+          // Play power-up sound
+          soundManager.playSound('power-up');
+          
+          // Create ability activation particles
+          for (let i = 0; i < 12; i++) {
+            get().addParticle({
+              id: `ability-particle-${Date.now()}-${i}`,
+              position: {
+                x: player.position.x + player.size.width / 2,
+                y: player.position.y + player.size.height / 2,
+              },
+              velocity: {
+                x: (Math.random() - 0.5) * 200,
+                y: (Math.random() - 0.5) * 200,
+              },
+              size: { width: 4, height: 4 },
+              health: 1,
+              maxHealth: 1,
+              isActive: true,
+              lifetime: 0,
+              maxLifetime: 1000,
+              color: '#00ffff',
+              alpha: 1,
+            });
+          }
+          
+          console.log('🛡️ Ability activated! 5 seconds of immunity!');
+        }
+      },
+      
       // Entity Management
       addEnemy: (enemy) => set((state) => ({
         enemies: [...state.enemies, enemy]
@@ -536,6 +640,104 @@ export const useGameStore = create<GameStore>()(
           enemies: state.enemies
             .map(enemy => {
               let newVelocity = { ...enemy.velocity };
+              let newLastShot = enemy.lastShot;
+              
+              // Handle enemy shooting
+              const now = Date.now();
+              if (enemy.shootCooldown && now - enemy.lastShot > enemy.shootCooldown) {
+                // Enemy can shoot
+                const shouldShoot = Math.random() < 0.3; // 30% chance to shoot when cooldown is ready
+                
+                if (shouldShoot) {
+                  // Different shooting patterns based on enemy type
+                  switch (enemy.type) {
+                    case 'shooter': {
+                      // Shooter enemies fire more frequently and accurately
+                      const bullet: Bullet = {
+                        id: `enemy-bullet-${Date.now()}-${Math.random()}`,
+                        position: {
+                          x: enemy.position.x + enemy.size.width / 2 - 2,
+                          y: enemy.position.y + enemy.size.height,
+                        },
+                        velocity: { x: 0, y: config.bullets.speed * 0.7 },
+                        size: { width: 3, height: 6 },
+                        health: 1,
+                        maxHealth: 1,
+                        isActive: true,
+                        damage: 25,
+                        owner: 'enemy',
+                        bulletType: 'basic',
+                        piercing: false,
+                        explosive: false,
+                      };
+                      get().addBullet(bullet);
+                      break;
+                    }
+                    
+                    case 'boss': {
+                      // Boss enemies fire multiple bullets in a spread pattern
+                      for (let i = 0; i < 3; i++) {
+                        const spreadAngle = (i - 1) * 0.2; // -0.2, 0, 0.2 radians
+                        const bullet: Bullet = {
+                          id: `boss-bullet-${Date.now()}-${Math.random()}-${i}`,
+                          position: {
+                            x: enemy.position.x + enemy.size.width / 2 - 2,
+                            y: enemy.position.y + enemy.size.height,
+                          },
+                          velocity: { 
+                            x: Math.sin(spreadAngle) * config.bullets.speed * 0.5,
+                            y: Math.cos(spreadAngle) * config.bullets.speed * 0.6
+                          },
+                          size: { width: 5, height: 10 },
+                          health: 1,
+                          maxHealth: 1,
+                          isActive: true,
+                        damage: 35,
+                        owner: 'enemy',
+                        bulletType: 'basic',
+                        piercing: false,
+                        explosive: false,
+                        };
+                        get().addBullet(bullet);
+                      }
+                      break;
+                    }
+                    
+                    default: {
+                      // Standard enemy bullet
+                      const bullet: Bullet = {
+                        id: `enemy-bullet-${Date.now()}-${Math.random()}`,
+                        position: {
+                          x: enemy.position.x + enemy.size.width / 2 - 2,
+                          y: enemy.position.y + enemy.size.height,
+                        },
+                        velocity: { x: 0, y: config.bullets.speed * 0.6 },
+                        size: { width: 4, height: 8 },
+                        health: 1,
+                        maxHealth: 1,
+                        isActive: true,
+                        damage: 20,
+                        owner: 'enemy',
+                        bulletType: 'basic',
+                        piercing: false,
+                        explosive: false,
+                      };
+                      get().addBullet(bullet);
+                      break;
+                    }
+                  }
+                  
+                  newLastShot = now;
+                  
+                  // Play enemy shoot sound (if available)
+                  try {
+                    soundManager.playSound('enemy-shoot');
+                  } catch (e) {
+                    // Fallback to regular shoot sound
+                    soundManager.playSound('shoot');
+                  }
+                }
+              }
               
               // Special behaviors for different enemy types
               switch (enemy.type) {
@@ -662,6 +864,7 @@ export const useGameStore = create<GameStore>()(
                   x: enemy.position.x + newVelocity.x,
                   y: enemy.position.y + newVelocity.y,
                 },
+                lastShot: newLastShot,
               };
             })
             .filter(enemy => enemy.position.y < config.canvas.height + 50)
@@ -727,6 +930,10 @@ export const useGameStore = create<GameStore>()(
         const powerUp = get().powerUps.find(p => p.id === id);
         if (!powerUp) return;
         
+        // Increment power-up collection stat FIRST
+        get().incrementStat('totalPowerUpsCollected');
+        console.log(`✨ Power-up collected: ${powerUp.type} (Total: ${get().stats.totalPowerUpsCollected})`);
+        
         // Play power-up collection sound
         soundManager.playSound('power-up');
         
@@ -759,7 +966,6 @@ export const useGameStore = create<GameStore>()(
         }
         
         get().removePowerUp(id);
-        get().incrementStat('totalPowerUpsCollected');
       },
       
       addParticle: (particle) => set((state) => ({
@@ -842,6 +1048,14 @@ export const useGameStore = create<GameStore>()(
                   score: player.score + enemy.points 
                 });
                 get().incrementStat('totalEnemiesDestroyed');
+                
+                // Fill ability bar based on enemy type
+                const abilityGain = enemy.type === 'boss' ? 25 : 
+                                   enemy.type === 'shooter' ? 8 : 
+                                   enemy.type === 'heavy' ? 6 : 4;
+                get().updatePlayer({
+                  abilityBar: Math.min(player.maxAbilityBar, player.abilityBar + abilityGain)
+                });
                 
                 // Play explosion sound (louder for bosses)
                 if (enemy.type === 'boss') {
@@ -1116,6 +1330,38 @@ export const useGameStore = create<GameStore>()(
                   setTimeout(() => soundManager.playSound('explosion'), i * 100);
                 }
               })
+              .with('shield-reflect', () => {
+                // Shield reflect effect - reflects enemy bullets back at them
+                const reflectDuration = 8000; // 8 seconds
+                get().updatePlayer({
+                  invulnerable: true,
+                  invulnerabilityTime: reflectDuration
+                });
+                console.log(`🛡️ Shield reflect activated for ${Math.round(reflectDuration/1000)}s!`);
+                
+                // Create shield reflect particles
+                for (let i = 0; i < 10; i++) {
+                  get().addParticle({
+                    id: `shield-reflect-particle-${Date.now()}-${i}`,
+                    position: {
+                      x: player.position.x + player.size.width / 2,
+                      y: player.position.y + player.size.height / 2,
+                    },
+                    velocity: {
+                      x: (Math.random() - 0.5) * 150,
+                      y: (Math.random() - 0.5) * 150,
+                    },
+                    size: { width: 3, height: 3 },
+                    health: 1,
+                    maxHealth: 1,
+                    isActive: true,
+                    lifetime: 0,
+                    maxLifetime: 800,
+                    color: '#00ffff',
+                    alpha: 1,
+                  });
+                }
+              })
               .otherwise(() => {});
           }
         });
@@ -1206,6 +1452,12 @@ export const useGameStore = create<GameStore>()(
       updateGameLogic: (deltaTime) => {
         const state = get();
         if (!state.isRunning || state.isPaused) return;
+        
+        // Update playtime every second during active gameplay
+        const now = Date.now();
+        if (now - lastStatsUpdate >= 1000) { // Update every second
+          get().updatePlayTime();
+        }
         
         // Update player timers
         const player = state.player;
@@ -1301,6 +1553,11 @@ export const useGameStore = create<GameStore>()(
           if (gameState === 'playing') get().pauseGame();
           else if (gameState === 'paused') get().resumeGame();
         }
+        
+        // Ability activation (B key)
+        if (key === 'b') {
+          get().activateAbility();
+        }
       },
       
       handleKeyUp: (key) => {
@@ -1349,11 +1606,17 @@ export const useGameStore = create<GameStore>()(
       
       // High Scores with Effect-TS
       addHighScore: async (score) => {
-        set((state) => ({
-          highScores: [...state.highScores, score]
-            .sort((a, b) => b.score - a.score)
-            .slice(0, 10)
+        const newHighScores = [...get().highScores, score]
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 10);
+        
+        set(() => ({
+          highScores: newHighScores
         }));
+        
+        console.log(`🏆 High score added: ${score.playerName} - ${score.score.toLocaleString()} points`);
+        
+        // The zustand persist middleware will automatically save to localStorage
       },
       
       getTopScores: (limit = 10) => {
@@ -1382,6 +1645,15 @@ export const useGameStore = create<GameStore>()(
         highScores: state.highScores,
         stats: state.stats,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          console.log('💾 Game data loaded from localStorage:', {
+            highScores: state.highScores?.length || 0,
+            totalPlayTime: state.stats?.totalPlayTime || 0,
+            totalEnemiesDestroyed: state.stats?.totalEnemiesDestroyed || 0,
+          });
+        }
+      },
     }
   )
 ); 
